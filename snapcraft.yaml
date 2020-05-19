@@ -12,8 +12,7 @@ parts:
   dumbproxy:
     plugin: go
     go-importpath: github.com/Snawoot/dumbproxy
-    source: https://github.com/Snawoot/dumbproxy
-    source-type: git
+    source: .
     build-packages:
       - gcc
 
