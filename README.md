@@ -47,6 +47,8 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
 
 ```
 $ ~/go/bin/dumbproxy -h
+  -auth string
+    	auth parameters (default "none://")
   -bind-address string
     	HTTP proxy listen address (default ":8080")
   -timeout duration
