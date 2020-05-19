@@ -24,6 +24,27 @@ Alternatively, you may install dumbproxy from source. Run within source director
 go install
 ```
 
+#### Docker
+
+Docker image is available as well. Here is an example for running proxy as a background service:
+
+```sh
+docker run -d \
+    --security-opt no-new-privileges \
+    -p 8080:8080 \
+    --restart unless-stopped \
+    --name dumbproxy \
+    yarmak/dumbproxy
+```
+
+#### Snap Store
+
+[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/dumbproxy)
+
+```bash
+sudo snap install dumbproxy
+```
+
 ## Usage
 
 Just run program and it'll start accepting connections on port 8080 (default).
