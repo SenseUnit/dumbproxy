@@ -51,7 +51,7 @@ func run() int {
                                 log.LstdFlags | log.Lshortfile),
                                 args.verbosity)
     mainLogger.Info("Starting proxy server...")
-    handler := NewProxyHandler(proxyLogger)
+    handler := NewProxyHandler(args.timeout, proxyLogger)
     err := http.ListenAndServe(args.bind_address, handler)
     mainLogger.Critical("Server terminated with a reason: %v", err)
     mainLogger.Info("Shutting down...")

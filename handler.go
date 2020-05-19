@@ -4,25 +4,31 @@ import (
     "io"
     "net"
     "fmt"
+    "time"
     "net/http"
     "strings"
+    "context"
 )
 
 type ProxyHandler struct {
+    timeout time.Duration
     logger *CondLogger
     httptransport http.RoundTripper
 }
 
-func NewProxyHandler(logger *CondLogger) *ProxyHandler {
+func NewProxyHandler(timeout time.Duration, logger *CondLogger) *ProxyHandler {
 	httptransport := &http.Transport{}
     return &ProxyHandler{
+        timeout: timeout,
         logger: logger,
         httptransport: httptransport,
     }
 }
 
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
-    conn, err := net.Dial("tcp", req.RequestURI)
+    ctx, _ := context.WithTimeout(req.Context(), s.timeout)
+    dialer := net.Dialer{}
+    conn, err := dialer.DialContext(ctx, "tcp", req.RequestURI)
     if err != nil {
         s.logger.Error("Can't satisfy CONNECT request: %v", err)
         http.Error(wr, "Can't satisfy CONNECT request", http.StatusBadGateway)
