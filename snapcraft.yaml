@@ -1,8 +1,9 @@
 name: dumbproxy
 version: '1.0.0'
 summary: Dumbiest HTTP proxy ever.
-description: |
-  Standalone Hola proxy client. Just run it and it'll start plain HTTP proxy server forwarding traffic via Hola proxies of your choice.
+description: >
+  Dumbiest HTTP proxy ever. See documentation for details:
+  https://github.com/Snawoot/dumbproxy/blob/master/README.md
 
 confinement: strict
 base: core18
