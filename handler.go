@@ -12,14 +12,16 @@ import (
 
 type ProxyHandler struct {
     timeout time.Duration
+    auth Auth
     logger *CondLogger
     httptransport http.RoundTripper
 }
 
-func NewProxyHandler(timeout time.Duration, logger *CondLogger) *ProxyHandler {
+func NewProxyHandler(timeout time.Duration, auth Auth, logger *CondLogger) *ProxyHandler {
 	httptransport := &http.Transport{}
     return &ProxyHandler{
         timeout: timeout,
+        auth: auth,
         logger: logger,
         httptransport: httptransport,
     }
@@ -65,11 +67,15 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
     delHopHeaders(resp.Header)
     copyHeader(wr.Header(), resp.Header)
     wr.WriteHeader(resp.StatusCode)
+    flush(wr)
     io.Copy(wr, resp.Body)
 }
 
 func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	s.logger.Info("Request: %v %v %v", req.RemoteAddr, req.Method, req.URL)
+    if !s.auth.Validate(wr, req) {
+        return
+    }
     delHopHeaders(req.Header)
     if strings.ToUpper(req.Method) == "CONNECT" {
         s.HandleTunnel(wr, req)

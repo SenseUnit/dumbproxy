@@ -82,3 +82,12 @@ func hijack(hijackable interface{}) (net.Conn, *bufio.ReadWriter, error) {
     }
     return conn, rw, nil
 }
+
+func flush(flusher interface{}) bool {
+    f, ok := flusher.(http.Flusher)
+    if !ok {
+        return false
+    }
+    f.Flush()
+    return true
+}

@@ -23,6 +23,7 @@ func arg_fail(msg string) {
 
 type CLIArgs struct {
     bind_address string
+    auth string
     verbosity int
     timeout time.Duration
 }
@@ -31,6 +32,7 @@ type CLIArgs struct {
 func parse_args() CLIArgs {
     var args CLIArgs
     flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address")
+    flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
     flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity " +
             "(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
     flag.DurationVar(&args.timeout, "timeout", 10 * time.Second, "timeout for network operations")
@@ -51,8 +53,13 @@ func run() int {
                                 log.LstdFlags | log.Lshortfile),
                                 args.verbosity)
     mainLogger.Info("Starting proxy server...")
-    handler := NewProxyHandler(args.timeout, proxyLogger)
-    err := http.ListenAndServe(args.bind_address, handler)
+    auth, err := NewAuth(args.auth)
+    if err != nil {
+        mainLogger.Critical("Failed to instantiate auth provider: %v", err)
+        return 3
+    }
+    handler := NewProxyHandler(args.timeout, auth, proxyLogger)
+    err = http.ListenAndServe(args.bind_address, handler)
     mainLogger.Critical("Server terminated with a reason: %v", err)
     mainLogger.Info("Shutting down...")
     return 0
