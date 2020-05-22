@@ -1,7 +1,6 @@
 package main
 
 import (
-    "io"
     "net"
     "fmt"
     "time"
@@ -68,7 +67,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
     copyHeader(wr.Header(), resp.Header)
     wr.WriteHeader(resp.StatusCode)
     flush(wr)
-    io.Copy(wr, resp.Body)
+    copyBody(wr, resp.Body)
 }
 
 func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {

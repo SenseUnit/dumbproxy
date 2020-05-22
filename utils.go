@@ -11,6 +11,8 @@ import (
     "bufio"
 )
 
+const COPY_BUF = 128 * 1024
+
 func proxy(ctx context.Context, left, right net.Conn) {
     wg := sync.WaitGroup{}
     cpy := func (dst, src net.Conn) {
@@ -90,4 +92,19 @@ func flush(flusher interface{}) bool {
     }
     f.Flush()
     return true
+}
+
+func copyBody(wr io.Writer, body io.Reader) {
+    for {
+        buf := make([]byte, COPY_BUF)
+        bread, read_err := body.Read(buf)
+        var write_err error
+        if bread > 0 {
+            _, write_err = wr.Write(buf[:bread])
+            flush(wr)
+        }
+        if read_err != nil || write_err != nil {
+            break
+        }
+    }
 }
