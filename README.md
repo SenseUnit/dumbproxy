@@ -9,6 +9,7 @@ Dumbiest HTTP proxy ever.
 * Zero-configuration
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
+* Supports TLS operation mode (HTTP(S) proxy over TLS)
 
 ## Installation
 
@@ -72,6 +73,10 @@ $ ~/go/bin/dumbproxy -h
     	auth parameters (default "none://")
   -bind-address string
     	HTTP proxy listen address (default ":8080")
+  -cert string
+    	enable TLS and use certificate
+  -key string
+    	key for TLS certificate
   -timeout duration
     	timeout for network operations (default 10s)
   -verbosity int

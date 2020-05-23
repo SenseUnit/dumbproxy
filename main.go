@@ -26,6 +26,7 @@ type CLIArgs struct {
     auth string
     verbosity int
     timeout time.Duration
+    cert, key string
 }
 
 
@@ -36,6 +37,8 @@ func parse_args() CLIArgs {
     flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity " +
             "(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
     flag.DurationVar(&args.timeout, "timeout", 10 * time.Second, "timeout for network operations")
+    flag.StringVar(&args.cert, "cert", "", "enable TLS and use certificate")
+    flag.StringVar(&args.key, "key", "", "key for TLS certificate")
     flag.Parse()
     return args
 }
@@ -52,14 +55,30 @@ func run() int {
     proxyLogger := NewCondLogger(log.New(logWriter, "PROXY   : ",
                                 log.LstdFlags | log.Lshortfile),
                                 args.verbosity)
-    mainLogger.Info("Starting proxy server...")
+
     auth, err := NewAuth(args.auth)
     if err != nil {
         mainLogger.Critical("Failed to instantiate auth provider: %v", err)
         return 3
     }
-    handler := NewProxyHandler(args.timeout, auth, proxyLogger)
-    err = http.ListenAndServe(args.bind_address, handler)
+
+    var server http.Server
+    server.Addr = args.bind_address
+    server.Handler = NewProxyHandler(args.timeout, auth, proxyLogger)
+    server.ErrorLog = log.New(logWriter, "HTTPSRV : ", log.LstdFlags | log.Lshortfile)
+
+    mainLogger.Info("Starting proxy server...")
+    if args.cert != "" {
+        cfg, err1 := makeServerTLSConfig(args.cert, args.key, "")
+        if err1 != nil {
+            mainLogger.Critical("TLS config construction failed: %v", err)
+            return 3
+        }
+        server.TLSConfig = cfg
+        err = server.ListenAndServeTLS("", "")
+    } else {
+        err = server.ListenAndServe()
+    }
     mainLogger.Critical("Server terminated with a reason: %v", err)
     mainLogger.Info("Shutting down...")
     return 0
