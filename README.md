@@ -6,6 +6,7 @@ Dumbiest HTTP proxy ever.
 ## Features
 
 * Cross-platform (Windows/Mac OS/Linux/Android (via shell)/\*BSD)
+* Deployment with a single self-contained binary
 * Zero-configuration
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
