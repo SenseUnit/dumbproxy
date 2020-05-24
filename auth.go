@@ -58,7 +58,9 @@ func NewStaticAuth(param_url *url.URL) (*StaticAuth, error) {
 }
 
 func requireBasicAuth(wr http.ResponseWriter, req *http.Request, hidden_domain string) {
-    if hidden_domain != "" && req.URL.Host != hidden_domain && req.Host != hidden_domain {
+    if hidden_domain != "" &&
+        (subtle.ConstantTimeCompare([]byte(req.URL.Host), []byte(hidden_domain)) != 1 &&
+        subtle.ConstantTimeCompare([]byte(req.Host), []byte(hidden_domain)) != 1) {
         http.Error(wr, "Bad Request", http.StatusBadRequest)
     } else {
         wr.Header().Set("Proxy-Authenticate", `Basic realm="dumbproxy"`)
@@ -83,8 +85,7 @@ func (auth *StaticAuth) Validate(wr http.ResponseWriter, req *http.Request) bool
     ok := (subtle.ConstantTimeCompare([]byte(token), []byte(auth.token)) == 1)
     if ok {
         if auth.hiddenDomain != "" &&
-            (subtle.ConstantTimeCompare([]byte(req.Host), []byte(auth.hiddenDomain)) == 1 ||
-            subtle.ConstantTimeCompare([]byte(req.URL.Host), []byte(auth.hiddenDomain)) == 1) {
+            (req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
             http.Error(wr, "Browser auth triggered!", http.StatusGone)
             return false
         } else {
