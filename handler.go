@@ -87,6 +87,11 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
 
 func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	s.logger.Info("Request: %v %v %v %v", req.RemoteAddr, req.Proto, req.Method, req.URL)
+    if ((req.URL.Host == "" || req.URL.Scheme == "") && req.ProtoMajor < 2) ||
+        (req.Host == "" && req.ProtoMajor == 2) {
+        http.Error(wr, "Bad Request", http.StatusBadRequest)
+        return
+    }
     if !s.auth.Validate(wr, req) {
         return
     }
