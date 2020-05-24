@@ -30,6 +30,8 @@ func NewAuth(paramstr string) (Auth, error) {
         return NewStaticAuth(url)
     case "basicfile":
         return NewBasicFileAuth(url)
+    case "cert":
+        return CertAuth{}, nil
     case "none":
         return NoAuth{}, nil
     default:
@@ -177,3 +179,14 @@ func (_ NoAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
     return true
 }
 
+
+type CertAuth struct {}
+
+func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
+    if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 {
+        http.Error(wr, "Forbidden", http.StatusForbidden)
+        return false
+    } else {
+        return true
+    }
+}

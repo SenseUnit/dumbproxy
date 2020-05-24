@@ -26,7 +26,7 @@ type CLIArgs struct {
     auth string
     verbosity int
     timeout time.Duration
-    cert, key string
+    cert, key, cafile string
 }
 
 
@@ -39,6 +39,7 @@ func parse_args() CLIArgs {
     flag.DurationVar(&args.timeout, "timeout", 10 * time.Second, "timeout for network operations")
     flag.StringVar(&args.cert, "cert", "", "enable TLS and use certificate")
     flag.StringVar(&args.key, "key", "", "key for TLS certificate")
+    flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
     flag.Parse()
     return args
 }
@@ -74,7 +75,7 @@ func run() int {
 
     mainLogger.Info("Starting proxy server...")
     if args.cert != "" {
-        cfg, err1 := makeServerTLSConfig(args.cert, args.key, "")
+        cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile)
         if err1 != nil {
             mainLogger.Critical("TLS config construction failed: %v", err)
             return 3
