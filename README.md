@@ -71,6 +71,7 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
 * `basicfile` - use htpasswd-like file with login and password pairs for authentication. Such file can be created/updated like this: `touch /etc/dumbproxy.htpasswd && htpasswd -bBC 10 /etc/dumbproxy.htpasswd username password`. `path` parameter in URL for this provider must point to a local file with login and bcrypt-hashed password lines. Example: `basicfile://?path=/etc/dumbproxy.htpasswd`.
   * `path` - location of file with login and password pairs. File format is similar to htpasswd files. Each line must be in form `<username>:<bcrypt hash of password>`. Empty lines and lines starting with `#` are ignored.
   * `hidden_domain` - same as in `static` provider
+* `cert` - use mutual TLS authentication with client certificates. In order to use this auth provider server must listen sockert in TLS mode (`-cert` and `-key` options) and client CA file must be specified (`-cacert`). Example: `cert://`.
 
 ## Synopsis
 
