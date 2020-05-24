@@ -89,7 +89,7 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
     isConnect := strings.ToUpper(req.Method) == "CONNECT"
     if (req.URL.Host == "" || req.URL.Scheme == "" && !isConnect) && req.ProtoMajor < 2 ||
         req.Host == "" && req.ProtoMajor == 2 {
-        http.Error(wr, "Bad Request", http.StatusBadRequest)
+        http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
         return
     }
     if !s.auth.Validate(wr, req) {

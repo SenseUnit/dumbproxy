@@ -11,6 +11,7 @@ Dumbiest HTTP proxy ever.
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
+* Supports client authentication with client TLS certificates
 * Supports HTTP/2
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 

@@ -14,6 +14,7 @@ import (
 )
 
 const AUTH_REQUIRED_MSG = "Proxy authentication required.\n"
+const BAD_REQ_MSG = "Bad Request\n"
 
 type Auth interface {
     Validate(wr http.ResponseWriter, req *http.Request) bool
@@ -68,7 +69,7 @@ func requireBasicAuth(wr http.ResponseWriter, req *http.Request, hidden_domain s
     if hidden_domain != "" &&
         (subtle.ConstantTimeCompare([]byte(req.URL.Host), []byte(hidden_domain)) != 1 &&
         subtle.ConstantTimeCompare([]byte(req.Host), []byte(hidden_domain)) != 1) {
-        http.Error(wr, "Bad Request", http.StatusBadRequest)
+        http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
     } else {
         wr.Header().Set("Proxy-Authenticate", `Basic realm="dumbproxy"`)
         wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_REQUIRED_MSG))))
@@ -184,7 +185,7 @@ type CertAuth struct {}
 
 func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
     if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 {
-        http.Error(wr, "Forbidden", http.StatusForbidden)
+        http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
         return false
     } else {
         return true
