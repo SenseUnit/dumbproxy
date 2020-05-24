@@ -81,10 +81,13 @@ type BasicAuth struct {
 }
 
 func NewBasicFileAuth(param_url *url.URL) (*BasicAuth, error) {
-    filename := param_url.Path
     values, err := url.ParseQuery(param_url.RawQuery)
     if err != nil {
         return nil, err
+    }
+    filename := values.Get("path")
+    if filename == "" {
+        return nil, errors.New("\"path\" parameter is missing from auth config URI")
     }
 
     f, err := os.Open(filename)
