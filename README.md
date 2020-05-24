@@ -82,6 +82,8 @@ $ ~/go/bin/dumbproxy -h
     	auth parameters (default "none://")
   -bind-address string
     	HTTP proxy listen address (default ":8080")
+  -cafile string
+    	CA file to authenticate clients with certificates
   -cert string
     	enable TLS and use certificate
   -key string
