@@ -7,7 +7,6 @@ import (
     "flag"
     "time"
     "net/http"
-    "crypto/tls"
 )
 
 func perror(msg string) {
@@ -67,7 +66,6 @@ func run() int {
         Addr: args.bind_address,
         Handler: NewProxyHandler(args.timeout, auth, proxyLogger),
         ErrorLog: log.New(logWriter, "HTTPSRV : ", log.LstdFlags | log.Lshortfile),
-        TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),  // No HTTP/2
         ReadTimeout: 0,
         ReadHeaderTimeout: 0,
         WriteTimeout: 0,

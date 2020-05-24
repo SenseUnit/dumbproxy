@@ -42,6 +42,36 @@ func proxy(ctx context.Context, left, right net.Conn) {
     return
 }
 
+func proxyh2(ctx context.Context, leftreader io.ReadCloser, leftwriter io.Writer, right net.Conn) {
+    wg := sync.WaitGroup{}
+    ltr := func (dst net.Conn, src io.Reader) {
+        defer wg.Done()
+        io.Copy(dst, src)
+        dst.Close()
+    }
+    rtl := func (dst io.Writer, src io.Reader) {
+        defer wg.Done()
+        copyBody(dst, src)
+    }
+    wg.Add(2)
+    go ltr(right, leftreader)
+    go rtl(leftwriter, right)
+    groupdone := make(chan struct{}, 1)
+    go func() {
+        wg.Wait()
+        groupdone <-struct{}{}
+    }()
+    select {
+    case <-ctx.Done():
+        leftreader.Close()
+        right.Close()
+    case <-groupdone:
+        return
+    }
+    <-groupdone
+    return
+}
+
 // Hop-by-hop headers. These are removed when sent to the backend.
 // http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
 var hopHeaders = []string{

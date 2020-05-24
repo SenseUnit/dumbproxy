@@ -38,19 +38,30 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
     defer conn.Close()
 
 
-    // Upgrade client connection
-    localconn, _, err := hijack(wr)
-    if err != nil {
-        s.logger.Error("Can't hijack client connection: %v", err)
-        http.Error(wr, "Can't hijack client connection", http.StatusInternalServerError)
+    if req.ProtoMajor == 0 || req.ProtoMajor == 1 {
+        // Upgrade client connection
+        localconn, _, err := hijack(wr)
+        if err != nil {
+            s.logger.Error("Can't hijack client connection: %v", err)
+            http.Error(wr, "Can't hijack client connection", http.StatusInternalServerError)
+            return
+        }
+        defer localconn.Close()
+
+        // Inform client connection is built
+        fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
+
+        proxy(req.Context(), localconn, conn)
+    } else if req.ProtoMajor == 2 {
+        wr.Header()["Date"] = nil
+        wr.WriteHeader(http.StatusOK)
+        flush(wr)
+        proxyh2(req.Context(), req.Body, wr, conn)
+    } else {
+        s.logger.Error("Unsupported protocol version: %s", req.Proto)
+        http.Error(wr, "Unsupported protocol version.", http.StatusBadRequest)
         return
     }
-    defer localconn.Close()
-
-    // Inform client connection is built
-    fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
-
-    proxy(req.Context(), localconn, conn)
 }
 
 func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) {
@@ -71,7 +82,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
 }
 
 func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
-	s.logger.Info("Request: %v %v %v", req.RemoteAddr, req.Method, req.URL)
+	s.logger.Info("Request: %v %v %v %v", req.RemoteAddr, req.Proto, req.Method, req.URL)
     if !s.auth.Validate(wr, req) {
         return
     }
