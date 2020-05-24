@@ -12,6 +12,7 @@ Dumbiest HTTP proxy ever.
 * Supports `Basic` proxy authentication
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
 * Supports HTTP/2
+* Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 
 ## Installation
 
@@ -64,8 +65,9 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
 
 * `none` - no authentication. Example: `none://`. This is default.
 * `static` - basic authentication for single login and password pair. Example: `static://?username=admin&password=123456`. Parameters:
-  * `username` - login
-  * `password` - password
+  * `username` - login.
+  * `password` - password.
+  * `hidden_domain` - if specified and is not an empty string, proxy will respond with "407 Proxy Authentication Required" only on specified domain. All unauthenticated clients will receive "400 Bad Request" status. This option is useful to prevent DPI active probing from discovering that service is a proxy, hiding proxy authentication prompt when no valid auth header was provided. Hidden domain is used for generating 407 response code to trigger browser authorization request in cases when browser has no prior knowledge proxy authentication is required. In such cases user has to navigate to any hidden domain page via plaintext HTTP, authenticate themselves and then browser will remember authentication.
 
 ## Synopsis
 
