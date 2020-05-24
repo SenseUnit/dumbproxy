@@ -82,7 +82,14 @@ func (auth *StaticAuth) Validate(wr http.ResponseWriter, req *http.Request) bool
     token := hdr_parts[1]
     ok := (subtle.ConstantTimeCompare([]byte(token), []byte(auth.token)) == 1)
     if ok {
-        return true
+        if auth.hiddenDomain != "" &&
+            (subtle.ConstantTimeCompare([]byte(req.Host), []byte(auth.hiddenDomain)) == 1 ||
+            subtle.ConstantTimeCompare([]byte(req.URL.Host), []byte(auth.hiddenDomain)) == 1) {
+            http.Error(wr, "Browser auth triggered!", http.StatusGone)
+            return false
+        } else {
+            return true
+        }
     } else {
         requireBasicAuth(wr, req, auth.hiddenDomain)
         return false
