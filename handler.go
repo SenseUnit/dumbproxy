@@ -66,6 +66,10 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 
 func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) {
     req.RequestURI = ""
+    if req.ProtoMajor == 2 {
+        req.URL.Scheme = "http" // We can't access :scheme pseudo-header, so assume http
+        req.URL.Host = req.Host
+    }
     resp, err := s.httptransport.RoundTrip(req)
     if err != nil {
         s.logger.Error("HTTP fetch error: %v", err)
