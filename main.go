@@ -68,6 +68,10 @@ func run() int {
         Handler: NewProxyHandler(args.timeout, auth, proxyLogger),
         ErrorLog: log.New(logWriter, "HTTPSRV : ", log.LstdFlags | log.Lshortfile),
         TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),  // No HTTP/2
+        ReadTimeout: 0,
+        ReadHeaderTimeout: 0,
+        WriteTimeout: 0,
+        IdleTimeout: 0,
     }
 
     mainLogger.Info("Starting proxy server...")
