@@ -11,6 +11,7 @@ Dumbiest HTTP proxy ever.
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
+* Supports HTTP/2
 
 ## Installation
 
