@@ -64,7 +64,7 @@ dumbproxy -bind-address :1234 -auth 'static://?username=admin&password=123456'
 
 ## Using HTTP-over-TLS proxy
 
-It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky.
+It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky. Note that TLS must be enabled (`-cert` and `-key` options) for this to work.
 
 ### Firefox
 
