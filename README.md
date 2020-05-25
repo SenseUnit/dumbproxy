@@ -62,6 +62,36 @@ Example: run proxy on port 1234 with `Basic` authentication with username `admin
 dumbproxy -bind-address :1234 -auth 'static://?username=admin&password=123456'
 ```
 
+## Using HTTP-over-TLS proxy
+
+It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky.
+
+### Firefox
+
+Option 1: inline PAC file in settings. Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration URL". Specify URL:
+
+```
+data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
+```
+
+![ff_https_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
+
+Option 2: use any proxy switching browser extension which supports HTTPS proxies like [this one](https://addons.mozilla.org/ru/firefox/addon/switchyomega/).
+
+### Chrome
+
+Option 1: specify proxy via command line:
+
+```
+chromium-browser --proxy-server='https://example.com:8080'
+```
+
+Option 2: use any proxy switching browser extension which supports HTTPS proxies like [this one](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif).
+
+### Other applications
+
+It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with help of external application which performs remote communication via TLS and exposes local plaintext socket. [steady-tun](https://github.com/Snawoot/steady-tun) appears to be most suitable for this because it supports connection pooling to hide connection delay.
+
 ## Authentication
 
 Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI defines authentication metnod and query parameters define parameter values for authentication provider.
