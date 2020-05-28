@@ -128,8 +128,8 @@ func flush(flusher interface{}) bool {
 }
 
 func copyBody(wr io.Writer, body io.Reader) {
+    buf := make([]byte, COPY_BUF)
     for {
-        buf := make([]byte, COPY_BUF)
         bread, read_err := body.Read(buf)
         var write_err error
         if bread > 0 {
