@@ -15,6 +15,8 @@ import (
 
 const AUTH_REQUIRED_MSG = "Proxy authentication required.\n"
 const BAD_REQ_MSG = "Bad Request\n"
+const AUTH_TRIGGERED_MSG = "Browser auth triggered!\n"
+const EPOCH_EXPIRE = "Thu, 01 Jan 1970 00:00:01 GMT"
 
 type Auth interface {
     Validate(wr http.ResponseWriter, req *http.Request) bool
@@ -164,7 +166,13 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool 
     if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil {
         if auth.hiddenDomain != "" &&
             (req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
-            http.Error(wr, "Browser auth triggered!", http.StatusGone)
+            wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_TRIGGERED_MSG))))
+            wr.Header().Set("Pragma", "no-cache")
+            wr.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+            wr.Header().Set("Expires", EPOCH_EXPIRE)
+            wr.Header()["Date"] = nil
+            wr.WriteHeader(http.StatusOK)
+            wr.Write([]byte(AUTH_TRIGGERED_MSG))
             return false
         } else {
             return true
