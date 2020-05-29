@@ -66,6 +66,22 @@ dumbproxy -bind-address :1234 -auth 'static://?username=admin&password=123456'
 
 It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky. Note that TLS must be enabled (`-cert` and `-key` options) for this to work.
 
+### Routing all browsers on Windows via HTTPS proxy
+
+Open proxy settings in system's network settings:
+
+![win10-proxy-settings](https://user-images.githubusercontent.com/3524671/83258553-216f7700-a1bf-11ea-8af9-3d8aed5b2e71.png)
+
+Turn on PAC script and set script address:
+
+```
+data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
+```
+
+where instead of `example.com:8080` you should use actual address of your HTTPS proxy.
+
+Note: this method will not work with MS Edge Legacy.
+
 ### Firefox
 
 Option 1: inline PAC file in settings. Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration URL". Specify URL:
