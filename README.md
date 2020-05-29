@@ -72,7 +72,7 @@ Open proxy settings in system's network settings:
 
 ![win10-proxy-settings](https://user-images.githubusercontent.com/3524671/83258553-216f7700-a1bf-11ea-8af9-3d8aed5b2e71.png)
 
-Turn on PAC script and set script address:
+Turn on setup script option and set script address:
 
 ```
 data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
