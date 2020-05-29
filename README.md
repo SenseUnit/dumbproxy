@@ -82,9 +82,11 @@ where instead of `example.com:8080` you should use actual address of your HTTPS 
 
 Note: this method will not work with MS Edge Legacy.
 
-### Firefox
+### Using with Firefox
 
-Option 1: inline PAC file in settings. Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration URL". Specify URL:
+#### Option 1. Inline PAC file in settings.
+
+Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration URL". Specify URL:
 
 ```
 data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
@@ -92,19 +94,25 @@ data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
 
 ![ff_https_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
 
-Option 2: use any proxy switching browser extension which supports HTTPS proxies like [this one](https://addons.mozilla.org/ru/firefox/addon/switchyomega/).
+#### Option 2. Browser extension.
 
-### Chrome
+Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://addons.mozilla.org/ru/firefox/addon/switchyomega/).
 
-Option 1: specify proxy via command line:
+### Using with Chrome
+
+#### Option 1. CLI option.
+
+Specify proxy via command line:
 
 ```
 chromium-browser --proxy-server='https://example.com:8080'
 ```
 
-Option 2: use any proxy switching browser extension which supports HTTPS proxies like [this one](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif).
+#### Option 2. Browser extension.
 
-### Other applications
+Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif).
+
+### Using with other applications
 
 It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with help of external application which performs remote communication via TLS and exposes local plaintext socket. [steady-tun](https://github.com/Snawoot/steady-tun) appears to be most suitable for this because it supports connection pooling to hide connection delay.
 
