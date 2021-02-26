@@ -30,6 +30,7 @@ type CLIArgs struct {
 	cert, key, cafile string
 	list_ciphers      bool
 	ciphers           string
+	disableHTTP2      bool
 }
 
 func list_ciphers() {
@@ -50,6 +51,7 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
 	flag.BoolVar(&args.list_ciphers, "list-ciphers", false, "list ciphersuites")
 	flag.StringVar(&args.ciphers, "ciphers", "", "colon-separated list of enabled ciphers")
+	flag.BoolVar(&args.disableHTTP2, "disable-http2", false, "disable HTTP2")
 	flag.Parse()
 	return args
 }
@@ -86,6 +88,10 @@ func run() int {
 		ReadHeaderTimeout: 0,
 		WriteTimeout:      0,
 		IdleTimeout:       0,
+	}
+
+	if args.disableHTTP2 {
+		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 	}
 
 	mainLogger.Info("Starting proxy server...")
