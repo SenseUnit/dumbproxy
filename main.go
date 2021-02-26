@@ -28,10 +28,10 @@ type CLIArgs struct {
 	verbosity         int
 	timeout           time.Duration
 	cert, key, cafile string
-	list_suites       bool
+	list_ciphers      bool
 }
 
-func list_suites() {
+func list_ciphers() {
 	for _, cipher := range tls.CipherSuites() {
 		fmt.Println(cipher.Name)
 	}
@@ -47,7 +47,7 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.cert, "cert", "", "enable TLS and use certificate")
 	flag.StringVar(&args.key, "key", "", "key for TLS certificate")
 	flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
-	flag.BoolVar(&args.list_suites, "list-ciphers", false, "list ciphersuites")
+	flag.BoolVar(&args.list_ciphers, "list-ciphers", false, "list ciphersuites")
 	flag.Parse()
 	return args
 }
@@ -55,8 +55,8 @@ func parse_args() CLIArgs {
 func run() int {
 	args := parse_args()
 
-	if args.list_suites {
-		list_suites()
+	if args.list_ciphers {
+		list_ciphers()
 		return 0
 	}
 
