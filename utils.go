@@ -8,8 +8,10 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -162,4 +164,28 @@ func makeServerTLSConfig(certfile, keyfile, cafile string) (*tls.Config, error) 
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
 	return &cfg, nil
+}
+
+func makeCipherList(ciphers string) []uint16 {
+	if ciphers == "" {
+		return nil
+	}
+
+	cipherIDs := make(map[string]uint16)
+	for _, cipher := range tls.CipherSuites() {
+		cipherIDs[cipher.Name] = cipher.ID
+	}
+
+	cipherNameList := strings.Split(ciphers, ":")
+	cipherIDList := make([]uint16, 0, len(cipherNameList))
+
+	for _, name := range cipherNameList {
+		id, ok := cipherIDs[name]
+		if !ok {
+			log.Printf("WARNING: Unknown cipher \"%s\"", name)
+		}
+		cipherIDList = append(cipherIDList, id)
+	}
+
+	return cipherIDList
 }

@@ -29,6 +29,7 @@ type CLIArgs struct {
 	timeout           time.Duration
 	cert, key, cafile string
 	list_ciphers      bool
+	ciphers           string
 }
 
 func list_ciphers() {
@@ -48,6 +49,7 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.key, "key", "", "key for TLS certificate")
 	flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
 	flag.BoolVar(&args.list_ciphers, "list-ciphers", false, "list ciphersuites")
+	flag.StringVar(&args.ciphers, "ciphers", "", "colon-separated list of enabled ciphers")
 	flag.Parse()
 	return args
 }
@@ -93,6 +95,7 @@ func run() int {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
 		}
+		cfg.CipherSuites = makeCipherList(args.ciphers)
 		server.TLSConfig = cfg
 		err = server.ListenAndServeTLS("", "")
 	} else {
