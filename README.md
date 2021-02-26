@@ -155,8 +155,14 @@ $ ~/go/bin/dumbproxy -h
     	CA file to authenticate clients with certificates
   -cert string
     	enable TLS and use certificate
+  -ciphers string
+    	colon-separated list of enabled ciphers
+  -disable-http2
+    	disable HTTP2
   -key string
     	key for TLS certificate
+  -list-ciphers
+    	list ciphersuites
   -timeout duration
     	timeout for network operations (default 10s)
   -verbosity int
