@@ -25,6 +25,7 @@ jobs:
           exclude: '*-rc*'
           commit-ish: 'HEAD~'
           skip-unshallow: 'true'
+          abbrev: 'false'
       -
         name: Determine image tag type
         uses: haya14busa/action-cond@v1
