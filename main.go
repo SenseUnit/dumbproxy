@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+var (
+	version = "undefined"
+)
+
 func perror(msg string) {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, msg)
@@ -31,6 +35,7 @@ type CLIArgs struct {
 	list_ciphers      bool
 	ciphers           string
 	disableHTTP2      bool
+	showVersion         bool
 }
 
 func list_ciphers() {
@@ -52,12 +57,19 @@ func parse_args() CLIArgs {
 	flag.BoolVar(&args.list_ciphers, "list-ciphers", false, "list ciphersuites")
 	flag.StringVar(&args.ciphers, "ciphers", "", "colon-separated list of enabled ciphers")
 	flag.BoolVar(&args.disableHTTP2, "disable-http2", false, "disable HTTP2")
+	flag.BoolVar(&args.showVersion, "version", false, "show program version and exit")
 	flag.Parse()
 	return args
 }
 
 func run() int {
 	args := parse_args()
+
+	if args.showVersion {
+		fmt.Println(version)
+		return 0
+	}
+
 
 	if args.list_ciphers {
 		list_ciphers()
