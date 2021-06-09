@@ -11,7 +11,22 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - name: Determine tag type
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      -
+        name: Find Git Tag
+        id: tagger
+        uses: jimschubert/query-tag-action@v1
+        with:
+          include: 'v*'
+          exclude: '*-rc*'
+          commit-ish: 'HEAD~'
+          skip-unshallow: 'true'
+      -
+        name: Determine image tag type
         uses: haya14busa/action-cond@v1
         id: imgtag
         with:
@@ -38,3 +53,5 @@ jobs:
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
           tags: ${{secrets.DOCKERHUB_USERNAME}}/dumbproxy:${{ steps.imgtag.outputs.value }}
+          build-args:
+            - 'GIT_DESC=${{steps.tagger.outputs.tag}}'
