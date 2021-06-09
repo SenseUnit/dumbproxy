@@ -32,8 +32,8 @@ jobs:
         id: imgtag
         with:
           cond: ${{ github.event_name == 'release' }}
-          if_true: ${{ env.RELEASE_VERSION }}
-          if_false: latest
+          if_true: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ env.RELEASE_VERSION }},${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
+          if_false: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -54,5 +54,5 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.imgtag.outputs.value }}
+          tags: ${{ steps.imgtag.outputs.value }}
           build-args: 'GIT_DESC=${{steps.tagger.outputs.tag}}'
