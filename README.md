@@ -167,4 +167,6 @@ $ ~/go/bin/dumbproxy -h
     	timeout for network operations (default 10s)
   -verbosity int
     	logging verbosity (10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical) (default 20)
+  -version
+    	show program version and exit
 ```
