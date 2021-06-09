@@ -4,11 +4,20 @@ on:
   push:
     branches:
       - 'master'
+  release:
+    types: [published]
 
 jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Determine tag type
+        uses: haya14busa/action-cond@v1
+        id: imgtag
+        with:
+          cond: ${{ github.event_name == 'release' }}
+          if_true: ${{ env.RELEASE_VERSION }}
+          if_false: latest
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -28,4 +37,4 @@ jobs:
         with:
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
-          tags: ${{secrets.DOCKERHUB_USERNAME}}/dumbproxy:latest
+          tags: ${{secrets.DOCKERHUB_USERNAME}}/dumbproxy:${{ steps.imgtag.outputs.value }}
