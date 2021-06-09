@@ -54,5 +54,5 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
-          tags: ${{secrets.DOCKERHUB_USERNAME}}/dumbproxy:${{ steps.imgtag.outputs.value }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.imgtag.outputs.value }}
           build-args: 'GIT_DESC=${{steps.tagger.outputs.tag}}'
