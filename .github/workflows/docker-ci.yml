@@ -23,7 +23,7 @@ jobs:
         with:
           include: 'v*'
           exclude: '*-rc*'
-          commit-ish: 'HEAD~'
+          commit-ish: 'HEAD'
           skip-unshallow: 'true'
           abbrev: 7
       -
