@@ -19,13 +19,13 @@ jobs:
       -
         name: Find Git Tag
         id: tagger
-        uses: jimschubert/query-tag-action@v1
+        uses: jimschubert/query-tag-action@v2
         with:
           include: 'v*'
           exclude: '*-rc*'
           commit-ish: 'HEAD~'
           skip-unshallow: 'true'
-          abbrev: 'false'
+          abbrev: 7
       -
         name: Determine image tag type
         uses: haya14busa/action-cond@v1
