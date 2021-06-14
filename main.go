@@ -110,7 +110,7 @@ func run() int {
 	if args.cert != "" {
 		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile)
 		if err1 != nil {
-			mainLogger.Critical("TLS config construction failed: %v", err)
+			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
 		}
 		cfg.CipherSuites = makeCipherList(args.ciphers)
