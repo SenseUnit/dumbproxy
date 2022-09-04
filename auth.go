@@ -5,12 +5,13 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"net/url"
 	"os"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 const AUTH_REQUIRED_MSG = "Proxy authentication required.\n"
