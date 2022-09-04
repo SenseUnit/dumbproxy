@@ -91,7 +91,13 @@ dumbproxy -bind-address :443 -auth 'static://?username=admin&password=123456' -a
 Run HTTPS proxy (HTTP proxy over TLS) with automatic certs from BuyPass on port 443 with `Basic` authentication with username `admin` and password `123456`:
 
 ```sh
-dumbproxy -bind-address :443 -auth 'static://?username=admin&password=123456' -autocert -autocert-acme 'https://api.buypass.com/acme/directory' -autocert-email YOUR-EMAIL@EXAMPLE.ORG -autocert-http :80
+dumbproxy \
+	-bind-address :443 \
+	-auth 'static://?username=admin&password=123456' \
+	-autocert \
+	-autocert-acme 'https://api.buypass.com/acme/directory' \
+	-autocert-email YOUR-EMAIL@EXAMPLE.ORG \
+	-autocert-http :80
 ```
 
 ## Using HTTP-over-TLS proxy
