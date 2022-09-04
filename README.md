@@ -26,6 +26,7 @@ You can say thanks to the author by donations to these wallets:
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
+* Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
 * Supports client authentication with client TLS certificates
 * Supports HTTP/2
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
@@ -69,15 +70,33 @@ sudo snap install dumbproxy
 
 Just run program and it'll start accepting connections on port 8080 (default).
 
-Example: run proxy on port 1234 with `Basic` authentication with username `admin` and password `123456`:
+### Example: plain proxy
+
+Run proxy on port 1234 with `Basic` authentication with username `admin` and password `123456`:
 
 ```sh
 dumbproxy -bind-address :1234 -auth 'static://?username=admin&password=123456'
 ```
 
+### Example: HTTP proxy over TLS (LetsEncrypt automatic certs)
+
+Run HTTPS proxy (HTTP proxy over TLS) with automatic certs from LetsEncrypt on port 443 with `Basic` authentication with username `admin` and password `123456`:
+
+```sh
+dumbproxy -bind-address :443 -auth 'static://?username=admin&password=123456' -autocert
+```
+
+### Example: HTTP proxy over TLS (BuyPass automatic certs)
+
+Run HTTPS proxy (HTTP proxy over TLS) with automatic certs from BuyPass on port 443 with `Basic` authentication with username `admin` and password `123456`:
+
+```sh
+dumbproxy -bind-address :443 -auth 'static://?username=admin&password=123456' -autocert -autocert-acme 'https://api.buypass.com/acme/directory' -autocert-email YOUR-EMAIL@EXAMPLE.ORG -autocert-http :80
+```
+
 ## Using HTTP-over-TLS proxy
 
-It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky. Note that TLS must be enabled (`-cert` and `-key` options) for this to work.
+It's quite trivial to set up program which supports proxies to use dumbproxy in plain HTTP mode. However, using HTTP proxy over TLS connection with browsers is little bit tricky. Note that TLS must be enabled (`-cert` and `-key` options or `-autocert` option) for this to work.
 
 ### Routing all browsers on Windows via HTTPS proxy
 
@@ -149,6 +168,18 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
 $ ~/go/bin/dumbproxy -h
   -auth string
     	auth parameters (default "none://")
+  -autocert
+    	issue TLS certificates automatically
+  -autocert-acme string
+    	custom ACME endpoint (default "https://acme-v02.api.letsencrypt.org/directory")
+  -autocert-dir string
+    	path to autocert cache (default "/home/user/.dumbproxy/autocert")
+  -autocert-email string
+    	email used for ACME registration
+  -autocert-http string
+    	listen address for HTTP-01 challenges handler of ACME
+  -autocert-whitelist value
+    	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address (default ":8080")
   -cafile string
