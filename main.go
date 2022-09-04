@@ -63,6 +63,7 @@ type CLIArgs struct {
 	autocertWhitelist CSVArg
 	autocertDir       string
 	autocertACME      string
+	autocertEmail     string
 }
 
 func list_ciphers() {
@@ -89,6 +90,7 @@ func parse_args() CLIArgs {
 	flag.Var(&args.autocertWhitelist, "autocert-whitelist", "restrict autocert domains to this comma-separated list")
 	flag.StringVar(&args.autocertDir, "autocert-dir", filepath.Join(home, ".dumbproxy", "autocert"), "path to autocert cache")
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
+	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.Parse()
 	return args
 }
@@ -151,6 +153,7 @@ func run() int {
 			Cache:  autocert.DirCache(args.autocertDir),
 			Prompt: autocert.AcceptTOS,
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
+			Email:  args.autocertEmail,
 		}
 		if args.autocertWhitelist != nil {
 			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
