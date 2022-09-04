@@ -7,10 +7,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
+
+	"golang.org/x/crypto/acme/autocert"
 )
 
 var (
+	home, _ = os.UserHomeDir()
 	version = "undefined"
 )
 
@@ -26,6 +31,23 @@ func arg_fail(msg string) {
 	os.Exit(2)
 }
 
+type CSVArg []string
+
+func (a *CSVArg) Set(s string) error {
+	*a = strings.Split(s, ",")
+	return nil
+}
+
+func (a *CSVArg) String() string {
+	if a == nil {
+		return "<nil>"
+	}
+	if *a == nil {
+		return "<empty>"
+	}
+	return strings.Join(*a, ",")
+}
+
 type CLIArgs struct {
 	bind_address      string
 	auth              string
@@ -35,7 +57,10 @@ type CLIArgs struct {
 	list_ciphers      bool
 	ciphers           string
 	disableHTTP2      bool
-	showVersion         bool
+	showVersion       bool
+	autocert          bool
+	autocertWhitelist CSVArg
+	autocertDir       string
 }
 
 func list_ciphers() {
@@ -58,6 +83,9 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.ciphers, "ciphers", "", "colon-separated list of enabled ciphers")
 	flag.BoolVar(&args.disableHTTP2, "disable-http2", false, "disable HTTP2")
 	flag.BoolVar(&args.showVersion, "version", false, "show program version and exit")
+	flag.BoolVar(&args.autocert, "autocert", false, "issue TLS certificates automatically")
+	flag.Var(&args.autocertWhitelist, "autocert-whitelist", "restrict autocert domains to this comma-separated list")
+	flag.StringVar(&args.autocertDir, "autocert-dir", filepath.Join(home, ".dumbproxy", "autocert"), "path to autocert cache")
 	flag.Parse()
 	return args
 }
@@ -69,7 +97,6 @@ func run() int {
 		fmt.Println(version)
 		return 0
 	}
-
 
 	if args.list_ciphers {
 		list_ciphers()
@@ -113,6 +140,18 @@ func run() int {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
 		}
+		cfg.CipherSuites = makeCipherList(args.ciphers)
+		server.TLSConfig = cfg
+		err = server.ListenAndServeTLS("", "")
+	} else if args.autocert {
+		m := &autocert.Manager{
+			Cache:  autocert.DirCache(args.autocertDir),
+			Prompt: autocert.AcceptTOS,
+		}
+		if args.autocertWhitelist != nil {
+			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
+		}
+		cfg := m.TLSConfig()
 		cfg.CipherSuites = makeCipherList(args.ciphers)
 		server.TLSConfig = cfg
 		err = server.ListenAndServeTLS("", "")
