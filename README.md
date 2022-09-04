@@ -154,6 +154,13 @@ Use any proxy switching browser extension which supports HTTPS proxies like [thi
 
 It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with help of external application which performs remote communication via TLS and exposes local plaintext socket. [steady-tun](https://github.com/Snawoot/steady-tun) appears to be most suitable for this because it supports connection pooling to hide connection delay.
 
+### Using with Android
+
+1. Run proxy as in [examples](#usage) above.
+2. Install Adguard on your Android: [Guide](https://adguard.com/en/adguard-android/overview.html).
+3. Follow [this guide](https://adguard.com/en/blog/configure-proxy.html#configuringproxyinadguardforandroid), skipping server configuration. Use proxy type HTTPS if you set up TLS-enabled server or else use HTTP type.
+4. Enjoy!
+
 ## Authentication
 
 Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI defines authentication metnod and query parameters define parameter values for authentication provider.
@@ -167,13 +174,6 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `path` - location of file with login and password pairs. File format is similar to htpasswd files. Each line must be in form `<username>:<bcrypt hash of password>`. Empty lines and lines starting with `#` are ignored.
   * `hidden_domain` - same as in `static` provider
 * `cert` - use mutual TLS authentication with client certificates. In order to use this auth provider server must listen sockert in TLS mode (`-cert` and `-key` options) and client CA file must be specified (`-cacert`). Example: `cert://`.
-
-### Using with Android
-
-1. Run proxy as in [examples](#usage) above.
-2. Install Adguard on your Android: [Guide](https://adguard.com/en/adguard-android/overview.html).
-3. Follow [this guide](https://adguard.com/en/blog/configure-proxy.html#configuringproxyinadguardforandroid), skipping server configuration. Use proxy type HTTPS if you set up TLS-enabled server or else use HTTP type.
-4. Enjoy!
 
 ## Synopsis
 
