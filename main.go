@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -61,6 +62,7 @@ type CLIArgs struct {
 	autocert          bool
 	autocertWhitelist CSVArg
 	autocertDir       string
+	autocertACME      string
 }
 
 func list_ciphers() {
@@ -86,6 +88,7 @@ func parse_args() CLIArgs {
 	flag.BoolVar(&args.autocert, "autocert", false, "issue TLS certificates automatically")
 	flag.Var(&args.autocertWhitelist, "autocert-whitelist", "restrict autocert domains to this comma-separated list")
 	flag.StringVar(&args.autocertDir, "autocert-dir", filepath.Join(home, ".dumbproxy", "autocert"), "path to autocert cache")
+	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.Parse()
 	return args
 }
@@ -147,6 +150,7 @@ func run() int {
 		m := &autocert.Manager{
 			Cache:  autocert.DirCache(args.autocertDir),
 			Prompt: autocert.AcceptTOS,
+			Client: &acme.Client{DirectoryURL: args.autocertACME},
 		}
 		if args.autocertWhitelist != nil {
 			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
