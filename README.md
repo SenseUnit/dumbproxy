@@ -168,6 +168,13 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `hidden_domain` - same as in `static` provider
 * `cert` - use mutual TLS authentication with client certificates. In order to use this auth provider server must listen sockert in TLS mode (`-cert` and `-key` options) and client CA file must be specified (`-cacert`). Example: `cert://`.
 
+### Using with Android
+
+1. Run proxy as in [examples](#usage) above.
+2. Install Adguard on your Android: [Guide](https://adguard.com/en/adguard-android/overview.html).
+3. Follow [this guide](https://adguard.com/en/blog/configure-proxy.html#configuringproxyinadguardforandroid), skipping server configuration. Use proxy type HTTPS if you set up TLS-enabled server or else use HTTP type.
+4. Enjoy!
+
 ## Synopsis
 
 ```
