@@ -64,6 +64,7 @@ type CLIArgs struct {
 	autocertDir       string
 	autocertACME      string
 	autocertEmail     string
+	autocertHTTP      string
 }
 
 func list_ciphers() {
@@ -91,6 +92,7 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.autocertDir, "autocert-dir", filepath.Join(home, ".dumbproxy", "autocert"), "path to autocert cache")
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
+	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
 	flag.Parse()
 	return args
 }
@@ -157,6 +159,12 @@ func run() int {
 		}
 		if args.autocertWhitelist != nil {
 			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
+		}
+		if args.autocertHTTP != "" {
+			go func() {
+				log.Fatalf("HTTP-01 ACME challenge server stopped: %v",
+					http.ListenAndServe(args.autocertHTTP, m.HTTPHandler(nil)))
+			}()
 		}
 		cfg := m.TLSConfig()
 		cfg.CipherSuites = makeCipherList(args.ciphers)
