@@ -1,5 +1,5 @@
 name: dumbproxy
-version: '1.5.0'
+version: '1.6.0'
 summary: Dumbiest HTTP proxy ever.
 description: >
   Dumbiest HTTP proxy ever. See documentation for details:
