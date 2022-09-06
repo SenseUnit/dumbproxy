@@ -16,6 +16,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const COPY_BUF = 128 * 1024
@@ -192,6 +195,62 @@ func makeCipherList(ciphers string) []uint16 {
 	return cipherIDList
 }
 
+func list_ciphers() {
+	for _, cipher := range tls.CipherSuites() {
+		fmt.Println(cipher.Name)
+	}
+}
+
+func passwd(filename string, cost int, args ...string) error {
+	var (
+		username, password, password2 string
+		err                           error
+	)
+
+	if len(args) > 0 {
+		username = args[0]
+	} else {
+		username, err = prompt("Enter username: ", false)
+		if err != nil {
+			return fmt.Errorf("can't get username: %w", err)
+		}
+	}
+
+	if len(args) > 1 {
+		password = args[1]
+	} else {
+		password, err = prompt("Enter password: ", true)
+		if err != nil {
+			return fmt.Errorf("can't get password: %w", err)
+		}
+		password2, err = prompt("Repeat password: ", true)
+		if err != nil {
+			return fmt.Errorf("can't get password (repeat): %w", err)
+		}
+		if password != password2 {
+			return fmt.Errorf("passwords do not match")
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
+	if err != nil {
+		return fmt.Errorf("can't generate password hash: %w", err)
+	}
+
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("can't open file: %w", err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%s:%s\n", username, hash))
+	if err != nil {
+		return fmt.Errorf("can't write to file: %w", err)
+	}
+
+	return nil
+}
+
 func fileModTime(filename string) (time.Time, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -205,4 +264,21 @@ func fileModTime(filename string) (time.Time, error) {
 	}
 
 	return fi.ModTime(), nil
+}
+
+func prompt(prompt string, secure bool) (string, error) {
+	var input string
+	fmt.Print(prompt)
+
+	if secure {
+		b, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", err
+		}
+		input = string(b)
+		fmt.Println()
+	} else {
+		fmt.Scanln(&input)
+	}
+	return input, nil
 }

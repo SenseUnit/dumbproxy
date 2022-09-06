@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -65,12 +66,9 @@ type CLIArgs struct {
 	autocertACME      string
 	autocertEmail     string
 	autocertHTTP      string
-}
-
-func list_ciphers() {
-	for _, cipher := range tls.CipherSuites() {
-		fmt.Println(cipher.Name)
-	}
+	passwd            string
+	passwdCost        int
+	positionalArgs    []string
 }
 
 func parse_args() CLIArgs {
@@ -93,7 +91,11 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
+	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
+		"Username and password can be passed as positional arguments or requested interactively")
+	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
 	flag.Parse()
+	args.positionalArgs = flag.Args()
 	return args
 }
 
@@ -107,6 +109,13 @@ func run() int {
 
 	if args.list_ciphers {
 		list_ciphers()
+		return 0
+	}
+
+	if args.passwd != "" {
+		if err := passwd(args.passwd, args.passwdCost, args.positionalArgs...); err != nil {
+			log.Fatalf("can't set password: %v", err)
+		}
 		return 0
 	}
 
