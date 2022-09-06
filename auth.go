@@ -1,16 +1,18 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/tg123/go-htpasswd"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,7 +25,7 @@ type Auth interface {
 	Validate(wr http.ResponseWriter, req *http.Request) bool
 }
 
-func NewAuth(paramstr string) (Auth, error) {
+func NewAuth(paramstr string, logger *CondLogger) (Auth, error) {
 	url, err := url.Parse(paramstr)
 	if err != nil {
 		return nil, err
@@ -31,9 +33,9 @@ func NewAuth(paramstr string) (Auth, error) {
 
 	switch strings.ToLower(url.Scheme) {
 	case "static":
-		return NewStaticAuth(url)
+		return NewStaticAuth(url, logger)
 	case "basicfile":
-		return NewBasicFileAuth(url)
+		return NewBasicFileAuth(url, logger)
 	case "cert":
 		return CertAuth{}, nil
 	case "none":
@@ -43,7 +45,7 @@ func NewAuth(paramstr string) (Auth, error) {
 	}
 }
 
-func NewStaticAuth(param_url *url.URL) (*BasicAuth, error) {
+func NewStaticAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -60,11 +62,21 @@ func NewStaticAuth(param_url *url.URL) (*BasicAuth, error) {
 	if err != nil {
 		return nil, err
 	}
+	buf := bytes.NewBufferString(username)
+	buf.WriteByte(':')
+	buf.Write(hashedPassword)
+
+	pwFile, err := htpasswd.NewFromReader(buf, htpasswd.DefaultSystems, func(parseError error) {
+		logger.Error("static auth: password entry parse error: %v", err)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate pwFile: %w", err)
+	}
+
 	return &BasicAuth{
-		users: map[string][]byte{
-			username: hashedPassword,
-		},
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
+		logger:       logger,
+		pwFile:       pwFile,
 	}, nil
 }
 
@@ -82,11 +94,14 @@ func requireBasicAuth(wr http.ResponseWriter, req *http.Request, hidden_domain s
 }
 
 type BasicAuth struct {
-	users        map[string][]byte
+	pwFilename   string
+	pwFile       *htpasswd.File
+	pwMux        sync.RWMutex
+	logger       *CondLogger
 	hiddenDomain string
 }
 
-func NewBasicFileAuth(param_url *url.URL) (*BasicAuth, error) {
+func NewBasicFileAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -96,38 +111,32 @@ func NewBasicFileAuth(param_url *url.URL) (*BasicAuth, error) {
 		return nil, errors.New("\"path\" parameter is missing from auth config URI")
 	}
 
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	users := make(map[string][]byte)
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		pair := strings.SplitN(line, ":", 2)
-		if len(pair) != 2 {
-			return nil, errors.New("Malformed login and password line")
-		}
-		login := pair[0]
-		password := pair[1]
-		users[login] = []byte(password)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if len(users) == 0 {
-		return nil, errors.New("No password lines were read from file")
-	}
-	return &BasicAuth{
-		users:        users,
+	auth := &BasicAuth{
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
-	}, nil
+		pwFilename:   filename,
+		logger:       logger,
+	}
+
+	if err := auth.reload(); err != nil {
+		return nil, fmt.Errorf("unable to load initial password list: %w", err)
+	}
+
+	return auth, nil
+}
+
+func (auth *BasicAuth) reload() error {
+	newPwFile, err := htpasswd.New(auth.pwFilename, htpasswd.DefaultSystems, func(parseErr error) {
+		auth.logger.Error("failed to parse line in %q: %v", auth.pwFilename, parseErr)
+	})
+	if err != nil {
+		return err
+	}
+
+	auth.pwMux.Lock()
+	defer auth.pwMux.Unlock()
+	auth.pwFile = newPwFile
+
+	return nil
 }
 
 func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
@@ -157,14 +166,12 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool 
 
 	login := pair[0]
 	password := pair[1]
+	
+	auth.pwMux.RLock()
+	pwFile := auth.pwFile
+	auth.pwMux.RUnlock()
 
-	hashedPassword, ok := auth.users[login]
-	if !ok {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
-	}
-
-	if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil {
+	if pwFile.Match(login, password) {
 		if auth.hiddenDomain != "" &&
 			(req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
 			wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_TRIGGERED_MSG))))

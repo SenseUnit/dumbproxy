@@ -119,8 +119,11 @@ func run() int {
 	proxyLogger := NewCondLogger(log.New(logWriter, "PROXY   : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	authLogger := NewCondLogger(log.New(logWriter, "AUTH    : ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
-	auth, err := NewAuth(args.auth)
+	auth, err := NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
