@@ -128,6 +128,7 @@ func run() int {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
+	defer auth.Stop()
 
 	server := http.Server{
 		Addr:              args.bind_address,

@@ -6,11 +6,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -188,4 +190,19 @@ func makeCipherList(ciphers string) []uint16 {
 	}
 
 	return cipherIDList
+}
+
+func fileModTime(filename string) (time.Time, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fileModTime(): can't open file %q: %w", filename, err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fileModTime(): can't stat file %q: %w", filename, err)
+	}
+
+	return fi.ModTime(), nil
 }
