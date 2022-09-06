@@ -1,16 +1,19 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/tg123/go-htpasswd"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,9 +24,10 @@ const EPOCH_EXPIRE = "Thu, 01 Jan 1970 00:00:01 GMT"
 
 type Auth interface {
 	Validate(wr http.ResponseWriter, req *http.Request) bool
+	Stop()
 }
 
-func NewAuth(paramstr string) (Auth, error) {
+func NewAuth(paramstr string, logger *CondLogger) (Auth, error) {
 	url, err := url.Parse(paramstr)
 	if err != nil {
 		return nil, err
@@ -31,9 +35,9 @@ func NewAuth(paramstr string) (Auth, error) {
 
 	switch strings.ToLower(url.Scheme) {
 	case "static":
-		return NewStaticAuth(url)
+		return NewStaticAuth(url, logger)
 	case "basicfile":
-		return NewBasicFileAuth(url)
+		return NewBasicFileAuth(url, logger)
 	case "cert":
 		return CertAuth{}, nil
 	case "none":
@@ -43,7 +47,7 @@ func NewAuth(paramstr string) (Auth, error) {
 	}
 }
 
-func NewStaticAuth(param_url *url.URL) (*BasicAuth, error) {
+func NewStaticAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -60,11 +64,22 @@ func NewStaticAuth(param_url *url.URL) (*BasicAuth, error) {
 	if err != nil {
 		return nil, err
 	}
+	buf := bytes.NewBufferString(username)
+	buf.WriteByte(':')
+	buf.Write(hashedPassword)
+
+	pwFile, err := htpasswd.NewFromReader(buf, htpasswd.DefaultSystems, func(parseError error) {
+		logger.Error("static auth: password entry parse error: %v", err)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("can't instantiate pwFile: %w", err)
+	}
+
 	return &BasicAuth{
-		users: map[string][]byte{
-			username: hashedPassword,
-		},
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
+		logger:       logger,
+		pwFile:       pwFile,
+		stopChan:     make(chan struct{}),
 	}, nil
 }
 
@@ -82,11 +97,17 @@ func requireBasicAuth(wr http.ResponseWriter, req *http.Request, hidden_domain s
 }
 
 type BasicAuth struct {
-	users        map[string][]byte
+	pwFilename   string
+	pwFile       *htpasswd.File
+	pwMux        sync.RWMutex
+	logger       *CondLogger
 	hiddenDomain string
+	stopOnce     sync.Once
+	stopChan     chan struct{}
+	lastReloaded time.Time
 }
 
-func NewBasicFileAuth(param_url *url.URL) (*BasicAuth, error) {
+func NewBasicFileAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -96,38 +117,78 @@ func NewBasicFileAuth(param_url *url.URL) (*BasicAuth, error) {
 		return nil, errors.New("\"path\" parameter is missing from auth config URI")
 	}
 
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	users := make(map[string][]byte)
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		pair := strings.SplitN(line, ":", 2)
-		if len(pair) != 2 {
-			return nil, errors.New("Malformed login and password line")
-		}
-		login := pair[0]
-		password := pair[1]
-		users[login] = []byte(password)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if len(users) == 0 {
-		return nil, errors.New("No password lines were read from file")
-	}
-	return &BasicAuth{
-		users:        users,
+	auth := &BasicAuth{
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
-	}, nil
+		pwFilename:   filename,
+		logger:       logger,
+		stopChan:     make(chan struct{}),
+	}
+
+	if err := auth.reload(); err != nil {
+		return nil, fmt.Errorf("unable to load initial password list: %w", err)
+	}
+
+	reloadIntervalOption := values.Get("reload")
+	reloadInterval, err := time.ParseDuration(reloadIntervalOption)
+	if err != nil {
+		reloadInterval = 0
+	}
+	if reloadInterval == 0 {
+		reloadInterval = 15 * time.Second
+	}
+	if reloadInterval > 0 {
+		go auth.reloadLoop(reloadInterval)
+	}
+
+	return auth, nil
+}
+
+func (auth *BasicAuth) reload() error {
+	auth.logger.Info("reloading password file from %q...", auth.pwFilename)
+	newPwFile, err := htpasswd.New(auth.pwFilename, htpasswd.DefaultSystems, func(parseErr error) {
+		auth.logger.Error("failed to parse line in %q: %v", auth.pwFilename, parseErr)
+	})
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+
+	auth.pwMux.Lock()
+	auth.pwFile = newPwFile
+	auth.lastReloaded = now
+	auth.pwMux.Unlock()
+	auth.logger.Info("password file reloaded.")
+
+	return nil
+}
+
+func (auth *BasicAuth) condReload() error {
+	reload := func() bool {
+		pwFileModTime, err := fileModTime(auth.pwFilename)
+		if err != nil {
+			auth.logger.Warning("can't get password file modtime: %v", err)
+			return true
+		}
+		return !pwFileModTime.Before(auth.lastReloaded)
+	}()
+	if reload {
+		return auth.reload()
+	}
+	return nil
+}
+
+func (auth *BasicAuth) reloadLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-auth.stopChan:
+			return
+		case <-ticker.C:
+			auth.condReload()
+		}
+	}
 }
 
 func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
@@ -158,13 +219,11 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool 
 	login := pair[0]
 	password := pair[1]
 
-	hashedPassword, ok := auth.users[login]
-	if !ok {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
-	}
+	auth.pwMux.RLock()
+	pwFile := auth.pwFile
+	auth.pwMux.RUnlock()
 
-	if bcrypt.CompareHashAndPassword(hashedPassword, []byte(password)) == nil {
+	if pwFile.Match(login, password) {
 		if auth.hiddenDomain != "" &&
 			(req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
 			wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_TRIGGERED_MSG))))
@@ -183,11 +242,19 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool 
 	return false
 }
 
+func (auth *BasicAuth) Stop() {
+	auth.stopOnce.Do(func() {
+		close(auth.stopChan)
+	})
+}
+
 type NoAuth struct{}
 
 func (_ NoAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
 	return true
 }
+
+func (_ NoAuth) Stop() {}
 
 type CertAuth struct{}
 
@@ -199,3 +266,5 @@ func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
 		return true
 	}
 }
+
+func (_ CertAuth) Stop() {}
