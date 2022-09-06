@@ -157,7 +157,7 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `username` - login.
   * `password` - password.
   * `hidden_domain` - if specified and is not an empty string, proxy will respond with "407 Proxy Authentication Required" only on specified domain. All unauthenticated clients will receive "400 Bad Request" status. This option is useful to prevent DPI active probing from discovering that service is a proxy, hiding proxy authentication prompt when no valid auth header was provided. Hidden domain is used for generating 407 response code to trigger browser authorization request in cases when browser has no prior knowledge proxy authentication is required. In such cases user has to navigate to any hidden domain page via plaintext HTTP, authenticate themselves and then browser will remember authentication.
-* `basicfile` - use htpasswd-like file with login and password pairs for authentication. Such file can be created/updated like this: `touch /etc/dumbproxy.htpasswd && htpasswd -bBC 4 /etc/dumbproxy.htpasswd username password`. `path` parameter in URL for this provider must point to a local file with login and bcrypt-hashed password lines. Example: `basicfile://?path=/etc/dumbproxy.htpasswd`.
+* `basicfile` - use htpasswd-like file with login and password pairs for authentication. Such file can be created/updated with command like this: `dumbproxy -passwd /etc/dumbproxy.htpasswd username password` or with `htpasswd` utility from Apache HTTPD utils. `path` parameter in URL for this provider must point to a local file with login and bcrypt-hashed password lines. Example: `basicfile://?path=/etc/dumbproxy.htpasswd`.
   * `path` - location of file with login and password pairs. File format is similar to htpasswd files. Each line must be in form `<username>:<bcrypt hash of password>`. Empty lines and lines starting with `#` are ignored.
   * `hidden_domain` - same as in `static` provider
   * `reload` - interval for conditional password file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
@@ -195,6 +195,10 @@ $ ~/go/bin/dumbproxy -h
     	key for TLS certificate
   -list-ciphers
     	list ciphersuites
+  -passwd string
+    	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
+  -passwd-cost int
+    	bcrypt password cost (for -passwd mode) (default 4)
   -timeout duration
     	timeout for network operations (default 10s)
   -verbosity int
