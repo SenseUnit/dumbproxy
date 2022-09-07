@@ -155,12 +155,11 @@ func run() int {
 
 	mainLogger.Info("Starting proxy server...")
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile)
+		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile, args.ciphers)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
 		}
-		cfg.CipherSuites = makeCipherList(args.ciphers)
 		server.TLSConfig = cfg
 		err = server.ListenAndServeTLS("", "")
 	} else if args.autocert {
@@ -180,7 +179,11 @@ func run() int {
 			}()
 		}
 		cfg := m.TLSConfig()
-		cfg.CipherSuites = makeCipherList(args.ciphers)
+		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers)
+		if err != nil {
+			mainLogger.Critical("TLS config construction failed: %v", err)
+			return 3
+		}
 		server.TLSConfig = cfg
 		err = server.ListenAndServeTLS("", "")
 	} else {
