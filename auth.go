@@ -23,7 +23,7 @@ const AUTH_TRIGGERED_MSG = "Browser auth triggered!\n"
 const EPOCH_EXPIRE = "Thu, 01 Jan 1970 00:00:01 GMT"
 
 type Auth interface {
-	Validate(wr http.ResponseWriter, req *http.Request) bool
+	Validate(wr http.ResponseWriter, req *http.Request) (string, bool)
 	Stop()
 }
 
@@ -191,29 +191,29 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 	}
 }
 
-func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
+func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
 		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
+		return "", false
 	}
 	hdr_parts := strings.SplitN(hdr, " ", 2)
 	if len(hdr_parts) != 2 || strings.ToLower(hdr_parts[0]) != "basic" {
 		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
+		return "", false
 	}
 
 	token := hdr_parts[1]
 	data, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
 		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
+		return "", false
 	}
 
 	pair := strings.SplitN(string(data), ":", 2)
 	if len(pair) != 2 {
 		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return false
+		return "", false
 	}
 
 	login := pair[0]
@@ -233,13 +233,13 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) bool 
 			wr.Header()["Date"] = nil
 			wr.WriteHeader(http.StatusOK)
 			wr.Write([]byte(AUTH_TRIGGERED_MSG))
-			return false
+			return "", false
 		} else {
-			return true
+			return login, true
 		}
 	}
 	requireBasicAuth(wr, req, auth.hiddenDomain)
-	return false
+	return "", false
 }
 
 func (auth *BasicAuth) Stop() {
@@ -250,20 +250,20 @@ func (auth *BasicAuth) Stop() {
 
 type NoAuth struct{}
 
-func (_ NoAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
-	return true
+func (_ NoAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+	return "", true
 }
 
 func (_ NoAuth) Stop() {}
 
 type CertAuth struct{}
 
-func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) bool {
-	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 {
+func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 || len(req.TLS.VerifiedChains[0]) < 1 {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
-		return false
+		return "", false
 	} else {
-		return true
+		return req.TLS.VerifiedChains[0][0].Subject.String(), true
 	}
 }
 
