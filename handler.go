@@ -106,8 +106,6 @@ func (s *ProxyHandler) isLoopback(req *http.Request) (string, bool) {
 }
 
 func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
-	s.logger.Info("Request: %v %v %v %v", req.RemoteAddr, req.Proto, req.Method, req.URL)
-
 	if originator, isLoopback := s.isLoopback(req); isLoopback {
 		s.logger.Critical("Loopback tunnel detected: %s is an outbound "+
 			"address for another request from %s", req.RemoteAddr, originator)
@@ -121,7 +119,11 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 		return
 	}
-	if !s.auth.Validate(wr, req) {
+
+	username, ok := s.auth.Validate(wr, req)
+	s.logger.Info("Request: %v %q %v %v %v", req.RemoteAddr, username, req.Proto, req.Method, req.URL)
+
+	if !ok {
 		return
 	}
 	delHopHeaders(req.Header)
