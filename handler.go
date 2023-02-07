@@ -10,21 +10,29 @@ import (
 	"time"
 )
 
+type HandlerDialer interface {
+	DialContext(ctx context.Context, net, address string) (net.Conn, error)
+}
+
 type ProxyHandler struct {
 	timeout       time.Duration
 	auth          Auth
 	logger        *CondLogger
+	dialer        HandlerDialer
 	httptransport http.RoundTripper
 	outbound      map[string]string
 	outboundMux   sync.RWMutex
 }
 
-func NewProxyHandler(timeout time.Duration, auth Auth, logger *CondLogger) *ProxyHandler {
-	httptransport := &http.Transport{}
+func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer, logger *CondLogger) *ProxyHandler {
+	httptransport := &http.Transport{
+		DialContext: dialer.DialContext,
+	}
 	return &ProxyHandler{
 		timeout:       timeout,
 		auth:          auth,
 		logger:        logger,
+		dialer:        dialer,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
 	}
@@ -32,8 +40,7 @@ func NewProxyHandler(timeout time.Duration, auth Auth, logger *CondLogger) *Prox
 
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 	ctx, _ := context.WithTimeout(req.Context(), s.timeout)
-	dialer := net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "tcp", req.RequestURI)
+	conn, err := s.dialer.DialContext(ctx, "tcp", req.RequestURI)
 	if err != nil {
 		s.logger.Error("Can't satisfy CONNECT request: %v", err)
 		http.Error(wr, "Can't satisfy CONNECT request", http.StatusBadGateway)
