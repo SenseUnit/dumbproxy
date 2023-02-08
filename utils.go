@@ -18,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/magisterquis/connectproxy"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh/terminal"
 	xproxy "golang.org/x/net/proxy"
@@ -311,8 +310,8 @@ var registerDialerTypesOnce sync.Once
 
 func proxyDialerFromURL(proxyURL string, forward Dialer) (Dialer, error) {
 	registerDialerTypesOnce.Do(func() {
-		xproxy.RegisterDialerType("http", connectproxy.New)
-		xproxy.RegisterDialerType("https", connectproxy.New)
+		xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
+		xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
 	})
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
