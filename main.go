@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,6 +70,7 @@ type CLIArgs struct {
 	passwd            string
 	passwdCost        int
 	positionalArgs    []string
+	proxy             []string
 }
 
 func parse_args() CLIArgs {
@@ -94,6 +96,10 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
 		"Username and password can be passed as positional arguments or requested interactively")
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
+	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
+		args.proxy = append(args.proxy, p)
+		return nil
+	})
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -139,9 +145,19 @@ func run() int {
 	}
 	defer auth.Stop()
 
+	var dialer Dialer = new(net.Dialer)
+	for _, proxyURL := range args.proxy {
+		newDialer, err := proxyDialerFromURL(proxyURL, dialer)
+		if err != nil {
+			mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
+			return 3
+		}
+		dialer = newDialer
+	}
+
 	server := http.Server{
 		Addr:              args.bind_address,
-		Handler:           NewProxyHandler(args.timeout, auth, proxyLogger),
+		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), proxyLogger),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,
@@ -186,7 +202,9 @@ func run() int {
 		}
 		server.TLSConfig = cfg
 		err = server.ListenAndServeTLS("", "")
+		mainLogger.Info("Proxy server started.")
 	} else {
+		mainLogger.Info("Proxy server started.")
 		err = server.ListenAndServe()
 	}
 	mainLogger.Critical("Server terminated with a reason: %v", err)
