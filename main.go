@@ -96,7 +96,7 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
 		"Username and password can be passed as positional arguments or requested interactively")
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
-	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies", func(p string) error {
+	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
 		args.proxy = append(args.proxy, p)
 		return nil
 	})

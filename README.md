@@ -17,6 +17,7 @@ Dumbiest HTTP proxy ever.
 * Supports client authentication with client TLS certificates
 * Supports HTTP/2
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
+* Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 
 ## Installation
 
@@ -167,6 +168,7 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
 
 ```
 $ ~/go/bin/dumbproxy -h
+Usage of /home/user/go/bin/dumbproxy:
   -auth string
     	auth parameters (default "none://")
   -autocert
@@ -199,6 +201,8 @@ $ ~/go/bin/dumbproxy -h
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int
     	bcrypt password cost (for -passwd mode) (default 4)
+  -proxy value
+    	upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443
   -timeout duration
     	timeout for network operations (default 10s)
   -verbosity int
