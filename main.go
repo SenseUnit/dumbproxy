@@ -76,7 +76,7 @@ type CLIArgs struct {
 
 func parse_args() CLIArgs {
 	var args CLIArgs
-	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address")
+	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
