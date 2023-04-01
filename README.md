@@ -18,6 +18,7 @@ Dumbest HTTP proxy ever.
 * Supports HTTP/2
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
+* systemd socket activation
 
 ## Installation
 
@@ -184,7 +185,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -autocert-whitelist value
     	restrict autocert domains to this comma-separated list
   -bind-address string
-    	HTTP proxy listen address (default ":8080")
+    	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
   -cafile string
     	CA file to authenticate clients with certificates
   -cert string

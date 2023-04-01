@@ -151,7 +151,7 @@ func copyBody(wr io.Writer, body io.Reader) {
 	}
 }
 
-func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string) (*tls.Config, error) {
+func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, h2 bool) (*tls.Config, error) {
 	var cfg tls.Config
 	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	if err != nil {
@@ -171,10 +171,13 @@ func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string) (*tls.Config
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
 	cfg.CipherSuites = makeCipherList(ciphers)
+	if h2 {
+		cfg.NextProtos = []string{"h2", "http/1.1"}
+	}
 	return &cfg, nil
 }
 
-func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string) (*tls.Config, error) {
+func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, h2 bool) (*tls.Config, error) {
 	if cafile != "" {
 		roots := x509.NewCertPool()
 		certs, err := ioutil.ReadFile(cafile)
@@ -188,6 +191,9 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string) (*tls.Config
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
 	cfg.CipherSuites = makeCipherList(ciphers)
+	if h2 {
+		cfg.NextProtos = []string{"h2", "http/1.1"}
+	}
 	return cfg, nil
 }
 
