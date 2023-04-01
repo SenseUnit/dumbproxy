@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/go-systemd/v22/activation"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
@@ -170,14 +171,40 @@ func run() int {
 	}
 
 	mainLogger.Info("Starting proxy server...")
+	var listener net.Listener
+	if args.bind_address == "" {
+		// socket activation
+		listeners, err := activation.Listeners()
+		if err != nil {
+			mainLogger.Critical("socket activation failed: %v", err)
+			return 3
+		}
+		if len(listeners) != 1 {
+			mainLogger.Critical("socket activation failed: unexpected number of listeners: %d",
+				len(listeners))
+			return 3
+		}
+		if listeners[0] == nil {
+			mainLogger.Critical("socket activation failed: nil listener returned")
+			return 3
+		}
+		listener = listeners[0]
+	} else {
+		newListener, err := net.Listen("tcp", args.bind_address)
+		if err != nil {
+			mainLogger.Critical("listen failed: %v", err)
+			return 3
+		}
+		listener = newListener
+	}
+
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile, args.ciphers)
+		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile, args.ciphers, !args.disableHTTP2)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
 		}
-		server.TLSConfig = cfg
-		err = server.ListenAndServeTLS("", "")
+		listener = tls.NewListener(listener, cfg)
 	} else if args.autocert {
 		m := &autocert.Manager{
 			Cache:  autocert.DirCache(args.autocertDir),
@@ -195,18 +222,15 @@ func run() int {
 			}()
 		}
 		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers)
+		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, !args.disableHTTP2)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
 		}
-		server.TLSConfig = cfg
-		err = server.ListenAndServeTLS("", "")
-		mainLogger.Info("Proxy server started.")
-	} else {
-		mainLogger.Info("Proxy server started.")
-		err = server.ListenAndServe()
+		listener = tls.NewListener(listener, cfg)
 	}
+	mainLogger.Info("Proxy server started.")
+	err = server.Serve(listener)
 	mainLogger.Critical("Server terminated with a reason: %v", err)
 	mainLogger.Info("Shutting down...")
 	return 0
