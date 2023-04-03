@@ -173,6 +173,8 @@ func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, h2 bool) (*t
 	cfg.CipherSuites = makeCipherList(ciphers)
 	if h2 {
 		cfg.NextProtos = []string{"h2", "http/1.1"}
+	} else {
+		cfg.NextProtos = []string{"http/1.1"}
 	}
 	return &cfg, nil
 }
@@ -192,7 +194,9 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, h2 bool) (*t
 	}
 	cfg.CipherSuites = makeCipherList(ciphers)
 	if h2 {
-		cfg.NextProtos = []string{"h2", "http/1.1"}
+		cfg.NextProtos = []string{"h2", "http/1.1", "acme-tls/1"}
+	} else {
+		cfg.NextProtos = []string{"http/1.1", "acme-tls/1"}
 	}
 	return cfg, nil
 }
