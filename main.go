@@ -72,6 +72,7 @@ type CLIArgs struct {
 	passwdCost        int
 	positionalArgs    []string
 	proxy             []string
+	sourceIPHints     []net.IP
 }
 
 func parse_args() CLIArgs {
@@ -99,6 +100,14 @@ func parse_args() CLIArgs {
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
 	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
 		args.proxy = append(args.proxy, p)
+		return nil
+	})
+	flag.Func("ip-hints", "a comma-separated list of addresses to use on dial attempts. Example: \"10.0.0.1,fe80::2,0.0.0.0,::\"", func(p string) error {
+		list, err := parseIPList(p)
+		if err != nil {
+			return err
+		}
+		args.sourceIPHints = list
 		return nil
 	})
 	flag.Parse()
@@ -146,7 +155,7 @@ func run() int {
 	}
 	defer auth.Stop()
 
-	var dialer Dialer = new(net.Dialer)
+	var dialer Dialer = NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	for _, proxyURL := range args.proxy {
 		newDialer, err := proxyDialerFromURL(proxyURL, dialer)
 		if err != nil {
