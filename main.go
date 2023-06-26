@@ -103,7 +103,7 @@ func parse_args() CLIArgs {
 		args.proxy = append(args.proxy, p)
 		return nil
 	})
-	flag.Func("ip-hints", "a comma-separated list of addresses to use on dial attempts. Example: \"10.0.0.1,fe80::2,0.0.0.0,::\"", func(p string) error {
+	flag.Func("ip-hints", "a comma-separated list of source addresses to use on dial attempts. Example: \"10.0.0.1,fe80::2,0.0.0.0,::\"", func(p string) error {
 		list, err := parseIPList(p)
 		if err != nil {
 			return err
