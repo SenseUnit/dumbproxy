@@ -73,6 +73,7 @@ type CLIArgs struct {
 	positionalArgs    []string
 	proxy             []string
 	sourceIPHints     []net.IP
+	userIPHints       bool
 }
 
 func parse_args() CLIArgs {
@@ -110,6 +111,7 @@ func parse_args() CLIArgs {
 		args.sourceIPHints = list
 		return nil
 	})
+	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -167,7 +169,7 @@ func run() int {
 
 	server := http.Server{
 		Addr:              args.bind_address,
-		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), proxyLogger),
+		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), args.userIPHints, proxyLogger),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,

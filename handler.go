@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const HintsHeaderName = "X-Src-IP-Hints"
+
 type HandlerDialer interface {
 	DialContext(ctx context.Context, net, address string) (net.Conn, error)
 }
@@ -22,11 +24,14 @@ type ProxyHandler struct {
 	httptransport http.RoundTripper
 	outbound      map[string]string
 	outboundMux   sync.RWMutex
+	userIPHints   bool
 }
 
-func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer, logger *CondLogger) *ProxyHandler {
+func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer,
+	userIPHints bool, logger *CondLogger) *ProxyHandler {
 	httptransport := &http.Transport{
-		DialContext: dialer.DialContext,
+		DialContext:       dialer.DialContext,
+		DisableKeepAlives: userIPHints,
 	}
 	return &ProxyHandler{
 		timeout:       timeout,
@@ -35,6 +40,7 @@ func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer, log
 		dialer:        dialer,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
+		userIPHints:   userIPHints,
 	}
 }
 
@@ -132,6 +138,20 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 
 	if !ok {
 		return
+	}
+	if s.userIPHints {
+		hintValues := req.Header.Values(HintsHeaderName)
+		if len(hintValues) > 0 {
+			req.Header.Del(HintsHeaderName)
+			if hintIPs, err := parseIPList(hintValues[0]); err != nil {
+				s.logger.Info("Request: %v %q %v %v %v -- bad IP hint header: %q", req.RemoteAddr, username, req.Proto, req.Method, req.URL, hintValues[0])
+				http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
+				return
+			} else {
+				newCtx := context.WithValue(req.Context(), BoundDialerContextKey{}, hintIPs)
+				req = req.WithContext(newCtx)
+			}
+		}
 	}
 	delHopHeaders(req.Header)
 	if isConnect {
