@@ -194,6 +194,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	colon-separated list of enabled ciphers
   -disable-http2
     	disable HTTP2
+  -ip-hints value
+    	a comma-separated list of source addresses to use on dial attempts. Example: "10.0.0.1,fe80::2,0.0.0.0,::"
   -key string
     	key for TLS certificate
   -list-ciphers
@@ -206,6 +208,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443
   -timeout duration
     	timeout for network operations (default 10s)
+  -user-ip-hints
+    	allow IP hints to be specified by user in X-Src-IP-Hints header
   -verbosity int
     	logging verbosity (10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical) (default 20)
   -version

@@ -72,6 +72,8 @@ type CLIArgs struct {
 	passwdCost        int
 	positionalArgs    []string
 	proxy             []string
+	sourceIPHints     []net.IP
+	userIPHints       bool
 }
 
 func parse_args() CLIArgs {
@@ -101,6 +103,15 @@ func parse_args() CLIArgs {
 		args.proxy = append(args.proxy, p)
 		return nil
 	})
+	flag.Func("ip-hints", "a comma-separated list of source addresses to use on dial attempts. Example: \"10.0.0.1,fe80::2,0.0.0.0,::\"", func(p string) error {
+		list, err := parseIPList(p)
+		if err != nil {
+			return err
+		}
+		args.sourceIPHints = list
+		return nil
+	})
+	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -146,7 +157,7 @@ func run() int {
 	}
 	defer auth.Stop()
 
-	var dialer Dialer = new(net.Dialer)
+	var dialer Dialer = NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	for _, proxyURL := range args.proxy {
 		newDialer, err := proxyDialerFromURL(proxyURL, dialer)
 		if err != nil {
@@ -158,7 +169,7 @@ func run() int {
 
 	server := http.Server{
 		Addr:              args.bind_address,
-		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), proxyLogger),
+		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), args.userIPHints, proxyLogger),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,
