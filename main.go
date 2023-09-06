@@ -72,7 +72,7 @@ type CLIArgs struct {
 	passwdCost        int
 	positionalArgs    []string
 	proxy             []string
-	sourceIPHints     []net.IP
+	sourceIPHints     string
 	userIPHints       bool
 }
 
@@ -103,14 +103,7 @@ func parse_args() CLIArgs {
 		args.proxy = append(args.proxy, p)
 		return nil
 	})
-	flag.Func("ip-hints", "a comma-separated list of source addresses to use on dial attempts. Example: \"10.0.0.1,fe80::2,0.0.0.0,::\"", func(p string) error {
-		list, err := parseIPList(p)
-		if err != nil {
-			return err
-		}
-		args.sourceIPHints = list
-		return nil
-	})
+	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Parse()
 	args.positionalArgs = flag.Args()

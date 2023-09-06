@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 
 	"github.com/hashicorp/go-multierror"
 )
@@ -17,16 +18,21 @@ var (
 
 type BoundDialerContextKey struct{}
 
+type BoundDialerContextValue struct {
+	Hints     *string
+	LocalAddr string
+}
+
 type BoundDialerDefaultSink interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 type BoundDialer struct {
 	defaultDialer BoundDialerDefaultSink
-	defaultHints  []net.IP
+	defaultHints  string
 }
 
-func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints []net.IP) *BoundDialer {
+func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints string) *BoundDialer {
 	if defaultDialer == nil {
 		defaultDialer = &net.Dialer{}
 	}
@@ -38,13 +44,22 @@ func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints []net.IP)
 
 func (d *BoundDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	hints := d.defaultHints
+	lAddr := ""
 	if hintsOverride := ctx.Value(BoundDialerContextKey{}); hintsOverride != nil {
-		if hintsOverrideValue, ok := hintsOverride.([]net.IP); ok {
-			hints = hintsOverrideValue
+		if hintsOverrideValue, ok := hintsOverride.(BoundDialerContextValue); ok {
+			if hintsOverrideValue.Hints != nil {
+				hints = *hintsOverrideValue.Hints
+			}
+			lAddr = hintsOverrideValue.LocalAddr
 		}
 	}
 
-	if len(hints) == 0 {
+	parsedHints, err := parseHints(hints, lAddr)
+	if err != nil {
+		return nil, fmt.Errorf("dial failed: %w", err)
+	}
+
+	if len(parsedHints) == 0 {
 		return d.defaultDialer.DialContext(ctx, network, address)
 	}
 
@@ -61,7 +76,7 @@ func (d *BoundDialer) DialContext(ctx context.Context, network, address string) 
 	}
 
 	var resErr error
-	for _, lIP := range hints {
+	for _, lIP := range parsedHints {
 		lAddr, restrictedNetwork, err := ipToLAddr(netBase, lIP)
 		if err != nil {
 			resErr = multierror.Append(resErr, fmt.Errorf("ipToLAddr(%q) failed: %w", lIP.String(), err))
@@ -135,4 +150,20 @@ func ipToLAddr(network string, ip net.IP) (net.Addr, string, error) {
 	}
 
 	return lAddr, lNetwork, nil
+}
+
+func parseHints(hints, lAddr string) ([]net.IP, error) {
+	hints = os.Expand(hints, func(key string) string {
+		switch key {
+		case "lAddr":
+			return lAddr
+		default:
+			return fmt.Sprintf("<bad key:%q>", key)
+		}
+	})
+	res, err := parseIPList(hints)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse source IP hints %q: %w", hints, err)
+	}
+	return res, nil
 }
