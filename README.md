@@ -194,8 +194,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	colon-separated list of enabled ciphers
   -disable-http2
     	disable HTTP2
-  -ip-hints value
-    	a comma-separated list of source addresses to use on dial attempts. Example: "10.0.0.1,fe80::2,0.0.0.0,::"
+  -ip-hints string
+    	a comma-separated list of source addresses to use on dial attempts. "$lAddr" gets expanded to local address of connection. Example: "10.0.0.1,fe80::2,$lAddr,0.0.0.0,::"
   -key string
     	key for TLS certificate
   -list-ciphers
