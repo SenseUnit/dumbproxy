@@ -31,7 +31,7 @@ func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer,
 	userIPHints bool, logger *CondLogger) *ProxyHandler {
 	httptransport := &http.Transport{
 		DialContext:       dialer.DialContext,
-		DisableKeepAlives: userIPHints,
+		DisableKeepAlives: true,
 	}
 	return &ProxyHandler{
 		timeout:       timeout,
@@ -134,29 +134,45 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	}
 
 	username, ok := s.auth.Validate(wr, req)
-	s.logger.Info("Request: %v %q %v %v %v", req.RemoteAddr, username, req.Proto, req.Method, req.URL)
+	localAddr := getLocalAddr(req.Context())
+	s.logger.Info("Request: %v => %v %q %v %v %v", req.RemoteAddr, localAddr, username, req.Proto, req.Method, req.URL)
 
 	if !ok {
 		return
 	}
+
+	var ipHints *string
 	if s.userIPHints {
 		hintValues := req.Header.Values(HintsHeaderName)
 		if len(hintValues) > 0 {
 			req.Header.Del(HintsHeaderName)
-			if hintIPs, err := parseIPList(hintValues[0]); err != nil {
-				s.logger.Info("Request: %v %q %v %v %v -- bad IP hint header: %q", req.RemoteAddr, username, req.Proto, req.Method, req.URL, hintValues[0])
-				http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
-				return
-			} else {
-				newCtx := context.WithValue(req.Context(), BoundDialerContextKey{}, hintIPs)
-				req = req.WithContext(newCtx)
-			}
+			ipHints = &hintValues[0]
 		}
 	}
+	newCtx := context.WithValue(req.Context(), BoundDialerContextKey{}, BoundDialerContextValue{
+		Hints:     ipHints,
+		LocalAddr: trimAddrPort(localAddr),
+	})
+	req = req.WithContext(newCtx)
 	delHopHeaders(req.Header)
 	if isConnect {
 		s.HandleTunnel(wr, req)
 	} else {
 		s.HandleRequest(wr, req)
 	}
+}
+
+func trimAddrPort(addrPort string) string {
+	res, _, err := net.SplitHostPort(addrPort)
+	if err != nil {
+		return addrPort
+	}
+	return res
+}
+
+func getLocalAddr(ctx context.Context) string {
+	if addr, ok := ctx.Value(http.LocalAddrContextKey).(net.Addr); ok {
+		return addr.String()
+	}
+	return "<request context is missing address>"
 }
