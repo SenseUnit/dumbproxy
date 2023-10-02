@@ -215,3 +215,8 @@ Usage of /home/user/go/bin/dumbproxy:
   -version
     	show program version and exit
 ```
+
+## See Also
+
+* [Project Wiki](https://github.com/Snawoot/dumbproxy/wiki)
+* [Community in Telegram](https://t.me/alternative_proxy)
