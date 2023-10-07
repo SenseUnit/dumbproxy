@@ -1,0 +1,37 @@
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      -
+        name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+      -
+        name: Build
+        run: >-
+          make -j $(nproc) allplus
+          NDK_CC_ARM64="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          NDK_CC_ARM="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+      -
+        name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: bin/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

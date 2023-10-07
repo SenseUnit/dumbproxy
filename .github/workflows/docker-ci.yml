@@ -2,14 +2,8 @@ name: docker-ci
 
 on:
   push:
-    branches:
-      - 'master'
-  release:
-    types: [published]
-
-env:
-  DOCKER_BUILDKIT: 1
-  DOCKER_TAG_PREFIX: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+    tags:
+      - 'v*.*.*'
 
 jobs:
   docker:
@@ -17,7 +11,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       -
@@ -30,53 +24,39 @@ jobs:
           commit-ish: 'HEAD'
           skip-unshallow: 'true'
           abbrev: 7
-      -
-        name: Determine scratch image tag type
-        uses: haya14busa/action-cond@v1
-        id: imgtag_scratch
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          cond: ${{ github.event_name == 'release' }}
-          if_true: ${{ env.DOCKER_TAG_PREFIX }}:${{ github.event.release.tag_name }},${{ env.DOCKER_TAG_PREFIX }}:latest
-          if_false: ${{ env.DOCKER_TAG_PREFIX }}:latest
-      -
-        name: Determine Alpine image tag type
-        uses: haya14busa/action-cond@v1
-        id: imgtag_alpine
-        with:
-          cond: ${{ github.event_name == 'release' }}
-          if_true: ${{ env.DOCKER_TAG_PREFIX }}:${{ github.event.release.tag_name }}-alpine,${{ env.DOCKER_TAG_PREFIX }}:latest-alpine
-          if_false: ${{ env.DOCKER_TAG_PREFIX }}:latest-alpine
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       -
         name: Login to DockerHub
-        uses: docker/login-action@v2 
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
-        name: Build and push scratch image
-        id: docker_build_scratch
-        uses: docker/build-push-action@v4
+        name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
-          tags: ${{ steps.imgtag_scratch.outputs.value }}
-          target: scratch
-          build-args: 'GIT_DESC=${{ steps.tagger.outputs.tag }}'
-      -
-        name: Build and push Alpine image
-        id: docker_build_alpine
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
-          push: true
-          tags: ${{ steps.imgtag_alpine.outputs.value }}
-          target: alpine
-          build-args: 'GIT_DESC=${{ steps.tagger.outputs.tag }}'
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: 'GIT_DESC=${{steps.tagger.outputs.tag}}'
