@@ -23,11 +23,16 @@ jobs:
         with:
           go-version: 'stable'
       -
+        name: Read tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      -
         name: Build
         run: >-
           make -j $(nproc) allplus
           NDK_CC_ARM64="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
           NDK_CC_ARM="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          VERSION=${{steps.tag.outputs.tag}}
       -
         name: Release
         uses: softprops/action-gh-release@v1
