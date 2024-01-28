@@ -1,4 +1,4 @@
-module github.com/Snawoot/dumbproxy
+module github.com/SenseUnit/dumbproxy
 
 go 1.13
 

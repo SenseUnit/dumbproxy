@@ -24,7 +24,7 @@ Dumbest HTTP proxy ever.
 
 #### Binary download
 
-Pre-built binaries available on [releases](https://github.com/Snawoot/dumbproxy/releases/latest) page.
+Pre-built binaries available on [releases](https://github.com/SenseUnit/dumbproxy/releases/latest) page.
 
 #### From source
 
@@ -218,5 +218,5 @@ Usage of /home/user/go/bin/dumbproxy:
 
 ## See Also
 
-* [Project Wiki](https://github.com/Snawoot/dumbproxy/wiki)
+* [Project Wiki](https://github.com/SenseUnit/dumbproxy/wiki)
 * [Community in Telegram](https://t.me/alternative_proxy)
