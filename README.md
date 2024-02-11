@@ -44,7 +44,7 @@ docker run -d \
     -p 8080:8080 \
     --restart unless-stopped \
     --name dumbproxy \
-    yarmak/dumbproxy
+    ghcr.io/senseunit/dumbproxy
 ```
 
 #### Snap Store
