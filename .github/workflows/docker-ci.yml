@@ -82,11 +82,13 @@ jobs:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           # generate Docker tags based on the following events/attributes
+          flavor: |
+            suffix=-alpine,onlatest=true
           tags: |
-            type=semver,pattern={{version}}-alpine
-            type=semver,pattern={{major}}.{{minor}}-alpine
-            type=semver,pattern={{major}}-alpine
-            type=sha,suffix=-alpine
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
       -
         name: Build and push alpine image
         id: docker_build_alpine
