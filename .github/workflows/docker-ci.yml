@@ -63,7 +63,7 @@ jobs:
             type=sha
       -
         name: Build and push scratch image
-        id: docker_build
+        id: docker_build_scratch
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -89,7 +89,7 @@ jobs:
             type=sha,suffix=-alpine
       -
         name: Build and push alpine image
-        id: docker_build
+        id: docker_build_alpine
         uses: docker/build-push-action@v5
         with:
           context: .
