@@ -8,6 +8,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  DOCKER_BUILDKIT: 1
 
 jobs:
   build-and-push-image:
@@ -33,19 +34,6 @@ jobs:
           commit-ish: 'HEAD'
           skip-unshallow: 'true'
           abbrev: 7
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          # list of Docker images to use as base name for tags
-          images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -60,13 +48,54 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       -
-        name: Build and push
+        name: Docker scratch meta
+        id: scratch_meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+      -
+        name: Build and push scratch image
         id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
+          target: scratch
           platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.scratch_meta.outputs.tags }}
+          labels: ${{ steps.scratch_meta.outputs.labels }}
+          build-args: 'GIT_DESC=${{steps.tagger.outputs.tag}}'
+      -
+        name: Docker alpine meta
+        id: alpine_meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=semver,pattern={{version}}-alpine
+            type=semver,pattern={{major}}.{{minor}}-alpine
+            type=semver,pattern={{major}}-alpine
+            type=sha,suffix=-alpine
+      -
+        name: Build and push alpine image
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: alpine
+          platforms: linux/amd64,linux/arm64,linux/386,linux/arm/v7
+          push: true
+          tags: ${{ steps.alpine_meta.outputs.tags }}
+          labels: ${{ steps.alpine_meta.outputs.labels }}
           build-args: 'GIT_DESC=${{steps.tagger.outputs.tag}}'
