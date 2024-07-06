@@ -52,6 +52,66 @@ func (a *CSVArg) String() string {
 	return strings.Join(*a, ",")
 }
 
+type TLSVersionArg uint16
+
+func (a *TLSVersionArg) Set(s string) error {
+	var ver uint16
+	switch strings.ToUpper(s) {
+	case "TLS10":
+		ver = tls.VersionTLS10
+	case "TLS11":
+		ver = tls.VersionTLS11
+	case "TLS12":
+		ver = tls.VersionTLS12
+	case "TLS13":
+		ver = tls.VersionTLS13
+	case "TLS1.0":
+		ver = tls.VersionTLS10
+	case "TLS1.1":
+		ver = tls.VersionTLS11
+	case "TLS1.2":
+		ver = tls.VersionTLS12
+	case "TLS1.3":
+		ver = tls.VersionTLS13
+	case "10":
+		ver = tls.VersionTLS10
+	case "11":
+		ver = tls.VersionTLS11
+	case "12":
+		ver = tls.VersionTLS12
+	case "13":
+		ver = tls.VersionTLS13
+	case "1.0":
+		ver = tls.VersionTLS10
+	case "1.1":
+		ver = tls.VersionTLS11
+	case "1.2":
+		ver = tls.VersionTLS12
+	case "1.3":
+		ver = tls.VersionTLS13
+	case "":
+	default:
+		return fmt.Errorf("unknown TLS version %q", s)
+	}
+	*a = TLSVersionArg(ver)
+	return nil
+}
+
+func (a *TLSVersionArg) String() string {
+	switch *a {
+	case tls.VersionTLS10:
+		return "TLS10"
+	case tls.VersionTLS11:
+		return "TLS11"
+	case tls.VersionTLS12:
+		return "TLS12"
+	case tls.VersionTLS13:
+		return "TLS13"
+	default:
+		return fmt.Sprintf("%#04x", *a)
+	}
+}
+
 type CLIArgs struct {
 	bind_address      string
 	auth              string
@@ -74,10 +134,15 @@ type CLIArgs struct {
 	proxy             []string
 	sourceIPHints     string
 	userIPHints       bool
+	minTLSVersion     TLSVersionArg
+	maxTLSVersion     TLSVersionArg
 }
 
 func parse_args() CLIArgs {
-	var args CLIArgs
+	args := CLIArgs{
+		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
+		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
+	}
 	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
@@ -105,6 +170,8 @@ func parse_args() CLIArgs {
 	})
 	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
+	flag.Var(&args.minTLSVersion, "min-tls-version", "minimal TLS version accepted by server")
+	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -203,7 +270,8 @@ func run() int {
 	}
 
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile, args.ciphers, !args.disableHTTP2)
+		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile,
+			args.ciphers, uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -226,7 +294,8 @@ func run() int {
 			}()
 		}
 		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, !args.disableHTTP2)
+		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers,
+			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
