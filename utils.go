@@ -151,8 +151,11 @@ func copyBody(wr io.Writer, body io.Reader) {
 	}
 }
 
-func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, h2 bool) (*tls.Config, error) {
-	var cfg tls.Config
+func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+	cfg := tls.Config{
+		MinVersion: minVer,
+		MaxVersion: maxVer,
+	}
 	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
 	if err != nil {
 		return nil, err
@@ -179,7 +182,7 @@ func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, h2 bool) (*t
 	return &cfg, nil
 }
 
-func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, h2 bool) (*tls.Config, error) {
+func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
 	if cafile != "" {
 		roots := x509.NewCertPool()
 		certs, err := ioutil.ReadFile(cafile)
@@ -198,6 +201,8 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, h2 bool) (*t
 	} else {
 		cfg.NextProtos = []string{"http/1.1", "acme-tls/1"}
 	}
+	cfg.MinVersion = minVer
+	cfg.MaxVersion = maxVer
 	return cfg, nil
 }
 

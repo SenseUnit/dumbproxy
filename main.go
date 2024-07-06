@@ -270,7 +270,8 @@ func run() int {
 	}
 
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile, args.ciphers, !args.disableHTTP2)
+		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile,
+			args.ciphers, uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -293,7 +294,8 @@ func run() int {
 			}()
 		}
 		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, !args.disableHTTP2)
+		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers,
+			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
