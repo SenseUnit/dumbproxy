@@ -200,6 +200,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	key for TLS certificate
   -list-ciphers
     	list ciphersuites
+  -max-tls-version value
+    	maximum TLS version accepted by server (default TLS13)
+  -min-tls-version value
+    	minimal TLS version accepted by server (default TLS12)
   -passwd string
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int
