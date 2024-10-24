@@ -2,8 +2,11 @@ package main
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +19,12 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/SenseUnit/dumbproxy/auth"
+	"github.com/SenseUnit/dumbproxy/dialer"
+	"github.com/SenseUnit/dumbproxy/handler"
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 var (
@@ -197,39 +206,44 @@ func run() int {
 		return 0
 	}
 
-	logWriter := NewLogWriter(os.Stderr)
+	logWriter := clog.NewLogWriter(os.Stderr)
 	defer logWriter.Close()
 
-	mainLogger := NewCondLogger(log.New(logWriter, "MAIN    : ",
+	mainLogger := clog.NewCondLogger(log.New(logWriter, "MAIN    : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
-	proxyLogger := NewCondLogger(log.New(logWriter, "PROXY   : ",
+	proxyLogger := clog.NewCondLogger(log.New(logWriter, "PROXY   : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
-	authLogger := NewCondLogger(log.New(logWriter, "AUTH    : ",
+	authLogger := clog.NewCondLogger(log.New(logWriter, "AUTH    : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
 
-	auth, err := NewAuth(args.auth, authLogger)
+	auth, err := auth.NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
 	defer auth.Stop()
 
-	var dialer Dialer = NewBoundDialer(new(net.Dialer), args.sourceIPHints)
+	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	for _, proxyURL := range args.proxy {
-		newDialer, err := proxyDialerFromURL(proxyURL, dialer)
+		newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
 		if err != nil {
 			mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
 			return 3
 		}
-		dialer = newDialer
+		d = newDialer
 	}
 
 	server := http.Server{
-		Addr:              args.bind_address,
-		Handler:           NewProxyHandler(args.timeout, auth, maybeWrapWithContextDialer(dialer), args.userIPHints, proxyLogger),
+		Addr: args.bind_address,
+		Handler: handler.NewProxyHandler(
+			args.timeout,
+			auth,
+			dialer.MaybeWrapWithContextDialer(d),
+			args.userIPHints,
+			proxyLogger),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,
@@ -307,6 +321,158 @@ func run() int {
 	mainLogger.Critical("Server terminated with a reason: %v", err)
 	mainLogger.Info("Shutting down...")
 	return 0
+}
+
+func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+	cfg := tls.Config{
+		MinVersion: minVer,
+		MaxVersion: maxVer,
+	}
+	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Certificates = []tls.Certificate{cert}
+	if cafile != "" {
+		roots := x509.NewCertPool()
+		certs, err := ioutil.ReadFile(cafile)
+		if err != nil {
+			return nil, err
+		}
+		if ok := roots.AppendCertsFromPEM(certs); !ok {
+			return nil, errors.New("Failed to load CA certificates")
+		}
+		cfg.ClientCAs = roots
+		cfg.ClientAuth = tls.VerifyClientCertIfGiven
+	}
+	cfg.CipherSuites = makeCipherList(ciphers)
+	if h2 {
+		cfg.NextProtos = []string{"h2", "http/1.1"}
+	} else {
+		cfg.NextProtos = []string{"http/1.1"}
+	}
+	return &cfg, nil
+}
+
+func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+	if cafile != "" {
+		roots := x509.NewCertPool()
+		certs, err := ioutil.ReadFile(cafile)
+		if err != nil {
+			return nil, err
+		}
+		if ok := roots.AppendCertsFromPEM(certs); !ok {
+			return nil, errors.New("Failed to load CA certificates")
+		}
+		cfg.ClientCAs = roots
+		cfg.ClientAuth = tls.VerifyClientCertIfGiven
+	}
+	cfg.CipherSuites = makeCipherList(ciphers)
+	if h2 {
+		cfg.NextProtos = []string{"h2", "http/1.1", "acme-tls/1"}
+	} else {
+		cfg.NextProtos = []string{"http/1.1", "acme-tls/1"}
+	}
+	cfg.MinVersion = minVer
+	cfg.MaxVersion = maxVer
+	return cfg, nil
+}
+
+func makeCipherList(ciphers string) []uint16 {
+	if ciphers == "" {
+		return nil
+	}
+
+	cipherIDs := make(map[string]uint16)
+	for _, cipher := range tls.CipherSuites() {
+		cipherIDs[cipher.Name] = cipher.ID
+	}
+
+	cipherNameList := strings.Split(ciphers, ":")
+	cipherIDList := make([]uint16, 0, len(cipherNameList))
+
+	for _, name := range cipherNameList {
+		id, ok := cipherIDs[name]
+		if !ok {
+			log.Printf("WARNING: Unknown cipher \"%s\"", name)
+		}
+		cipherIDList = append(cipherIDList, id)
+	}
+
+	return cipherIDList
+}
+
+func list_ciphers() {
+	for _, cipher := range tls.CipherSuites() {
+		fmt.Println(cipher.Name)
+	}
+}
+
+func passwd(filename string, cost int, args ...string) error {
+	var (
+		username, password, password2 string
+		err                           error
+	)
+
+	if len(args) > 0 {
+		username = args[0]
+	} else {
+		username, err = prompt("Enter username: ", false)
+		if err != nil {
+			return fmt.Errorf("can't get username: %w", err)
+		}
+	}
+
+	if len(args) > 1 {
+		password = args[1]
+	} else {
+		password, err = prompt("Enter password: ", true)
+		if err != nil {
+			return fmt.Errorf("can't get password: %w", err)
+		}
+		password2, err = prompt("Repeat password: ", true)
+		if err != nil {
+			return fmt.Errorf("can't get password (repeat): %w", err)
+		}
+		if password != password2 {
+			return fmt.Errorf("passwords do not match")
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
+	if err != nil {
+		return fmt.Errorf("can't generate password hash: %w", err)
+	}
+
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("can't open file: %w", err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(fmt.Sprintf("%s:%s\n", username, hash))
+	if err != nil {
+		return fmt.Errorf("can't write to file: %w", err)
+	}
+
+	return nil
+}
+
+func prompt(prompt string, secure bool) (string, error) {
+	var input string
+	fmt.Print(prompt)
+
+	if secure {
+		b, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		if err != nil {
+			return "", err
+		}
+		input = string(b)
+		fmt.Println()
+	} else {
+		fmt.Scanln(&input)
+	}
+	return input, nil
 }
 
 func main() {

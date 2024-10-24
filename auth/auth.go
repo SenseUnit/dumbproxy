@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/tg123/go-htpasswd"
 	"golang.org/x/crypto/bcrypt"
+
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 const AUTH_REQUIRED_MSG = "Proxy authentication required.\n"
@@ -27,7 +30,7 @@ type Auth interface {
 	Stop()
 }
 
-func NewAuth(paramstr string, logger *CondLogger) (Auth, error) {
+func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 	url, err := url.Parse(paramstr)
 	if err != nil {
 		return nil, err
@@ -47,7 +50,7 @@ func NewAuth(paramstr string, logger *CondLogger) (Auth, error) {
 	}
 }
 
-func NewStaticAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
+func NewStaticAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -100,14 +103,14 @@ type BasicAuth struct {
 	pwFilename   string
 	pwFile       *htpasswd.File
 	pwMux        sync.RWMutex
-	logger       *CondLogger
+	logger       *clog.CondLogger
 	hiddenDomain string
 	stopOnce     sync.Once
 	stopChan     chan struct{}
 	lastReloaded time.Time
 }
 
-func NewBasicFileAuth(param_url *url.URL, logger *CondLogger) (*BasicAuth, error) {
+func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
@@ -268,3 +271,18 @@ func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, b
 }
 
 func (_ CertAuth) Stop() {}
+
+func fileModTime(filename string) (time.Time, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fileModTime(): can't open file %q: %w", filename, err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("fileModTime(): can't stat file %q: %w", filename, err)
+	}
+
+	return fi.ModTime(), nil
+}

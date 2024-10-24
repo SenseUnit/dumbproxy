@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"context"
@@ -8,6 +8,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SenseUnit/dumbproxy/auth"
+	"github.com/SenseUnit/dumbproxy/dialer"
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 const HintsHeaderName = "X-Src-IP-Hints"
@@ -18,8 +22,8 @@ type HandlerDialer interface {
 
 type ProxyHandler struct {
 	timeout       time.Duration
-	auth          Auth
-	logger        *CondLogger
+	auth          auth.Auth
+	logger        *clog.CondLogger
 	dialer        HandlerDialer
 	httptransport http.RoundTripper
 	outbound      map[string]string
@@ -27,8 +31,8 @@ type ProxyHandler struct {
 	userIPHints   bool
 }
 
-func NewProxyHandler(timeout time.Duration, auth Auth, dialer HandlerDialer,
-	userIPHints bool, logger *CondLogger) *ProxyHandler {
+func NewProxyHandler(timeout time.Duration, auth auth.Auth, dialer HandlerDialer,
+	userIPHints bool, logger *clog.CondLogger) *ProxyHandler {
 	httptransport := &http.Transport{
 		DialContext:       dialer.DialContext,
 		DisableKeepAlives: true,
@@ -122,14 +126,14 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	if originator, isLoopback := s.isLoopback(req); isLoopback {
 		s.logger.Critical("Loopback tunnel detected: %s is an outbound "+
 			"address for another request from %s", req.RemoteAddr, originator)
-		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
+		http.Error(wr, auth.BAD_REQ_MSG, http.StatusBadRequest)
 		return
 	}
 
 	isConnect := strings.ToUpper(req.Method) == "CONNECT"
 	if (req.URL.Host == "" || req.URL.Scheme == "" && !isConnect) && req.ProtoMajor < 2 ||
 		req.Host == "" && req.ProtoMajor == 2 {
-		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
+		http.Error(wr, auth.BAD_REQ_MSG, http.StatusBadRequest)
 		return
 	}
 
@@ -149,7 +153,7 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 			ipHints = &hintValues[0]
 		}
 	}
-	newCtx := context.WithValue(req.Context(), BoundDialerContextKey{}, BoundDialerContextValue{
+	newCtx := context.WithValue(req.Context(), dialer.BoundDialerContextKey{}, dialer.BoundDialerContextValue{
 		Hints:     ipHints,
 		LocalAddr: trimAddrPort(localAddr),
 	})
