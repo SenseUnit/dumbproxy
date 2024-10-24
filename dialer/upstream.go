@@ -1,4 +1,4 @@
-package main
+package dialer
 
 import (
 	"bufio"
@@ -29,7 +29,7 @@ func NewHTTPProxyDialer(address string, tls bool, userinfo *url.Userinfo, next D
 	return &HTTPProxyDialer{
 		address:  address,
 		tls:      tls,
-		next:     maybeWrapWithContextDialer(next),
+		next:     MaybeWrapWithContextDialer(next),
 		userinfo: userinfo,
 	}
 }
@@ -106,7 +106,7 @@ func (d *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 	if d.userinfo != nil {
 		fmt.Fprintf(&reqBuf, "Proxy-Authorization: %s\r\n", basicAuthHeader(d.userinfo))
 	}
-	fmt.Fprintf(&reqBuf, "User-Agent: dumbproxy/%s\r\n\r\n", version)
+	fmt.Fprintf(&reqBuf, "User-Agent: dumbproxy\r\n\r\n")
 	_, err = io.Copy(conn, &reqBuf)
 	if err != nil {
 		conn.Close()
