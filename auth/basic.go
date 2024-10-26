@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tg123/go-htpasswd"
@@ -18,15 +19,17 @@ import (
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
+type pwFile struct {
+	file         *htpasswd.File
+	lastReloaded time.Time
+}
 type BasicAuth struct {
+	pw           atomic.Pointer[pwFile]
 	pwFilename   string
-	pwFile       *htpasswd.File
-	pwMux        sync.RWMutex
 	logger       *clog.CondLogger
 	hiddenDomain string
 	stopOnce     sync.Once
 	stopChan     chan struct{}
-	lastReloaded time.Time
 }
 
 func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, error) {
@@ -76,10 +79,11 @@ func (auth *BasicAuth) reload() error {
 
 	now := time.Now()
 
-	auth.pwMux.Lock()
-	auth.pwFile = newPwFile
-	auth.lastReloaded = now
-	auth.pwMux.Unlock()
+	newPw := &pwFile{
+		file:         newPwFile,
+		lastReloaded: now,
+	}
+	auth.pw.Store(newPw)
 	auth.logger.Info("password file reloaded.")
 
 	return nil
@@ -107,7 +111,7 @@ func (auth *BasicAuth) condReload() error {
 			auth.logger.Warning("can't get password file modtime: %v", err)
 			return true
 		}
-		return !pwFileModTime.Before(auth.lastReloaded)
+		return !pwFileModTime.Before(auth.pw.Load().lastReloaded)
 	}()
 	if reload {
 		return auth.reload()
@@ -169,9 +173,7 @@ func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) (stri
 	login := pair[0]
 	password := pair[1]
 
-	auth.pwMux.RLock()
-	pwFile := auth.pwFile
-	auth.pwMux.RUnlock()
+	pwFile := auth.pw.Load().file
 
 	if pwFile.Match(login, password) {
 		if auth.hiddenDomain != "" &&
