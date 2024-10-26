@@ -34,17 +34,18 @@ func NewStaticAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, err
 	buf.WriteByte(':')
 	buf.Write(hashedPassword)
 
-	pwFile, err := htpasswd.NewFromReader(buf, htpasswd.DefaultSystems, func(parseError error) {
+	f, err := htpasswd.NewFromReader(buf, htpasswd.DefaultSystems, func(parseError error) {
 		logger.Error("static auth: password entry parse error: %v", err)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("can't instantiate pwFile: %w", err)
 	}
 
-	return &BasicAuth{
+	ba := &BasicAuth{
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
 		logger:       logger,
-		pwFile:       pwFile,
 		stopChan:     make(chan struct{}),
-	}, nil
+	}
+	ba.pw.Store(&pwFile{file: f})
+	return ba, nil
 }
