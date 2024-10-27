@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,8 +19,8 @@ import (
 )
 
 type pwFile struct {
-	file         *htpasswd.File
-	lastReloaded time.Time
+	file    *htpasswd.File
+	modTime time.Time
 }
 type BasicAuth struct {
 	pw           atomic.Pointer[pwFile]
@@ -69,53 +68,35 @@ func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, 
 }
 
 func (auth *BasicAuth) reload() error {
+	var oldModTime time.Time
+	if oldPw := auth.pw.Load(); oldPw != nil {
+		oldModTime = oldPw.modTime
+	}
+
+	f, modTime, err := openIfModified(auth.pwFilename, oldModTime)
+	if err != nil {
+		return err
+	}
+	if f == nil {
+		// no changes since last modTime
+		return nil
+	}
+
 	auth.logger.Info("reloading password file from %q...", auth.pwFilename)
-	newPwFile, err := htpasswd.New(auth.pwFilename, htpasswd.DefaultSystems, func(parseErr error) {
+	newPwFile, err := htpasswd.NewFromReader(f, htpasswd.DefaultSystems, func(parseErr error) {
 		auth.logger.Error("failed to parse line in %q: %v", auth.pwFilename, parseErr)
 	})
 	if err != nil {
 		return err
 	}
 
-	now := time.Now()
-
 	newPw := &pwFile{
-		file:         newPwFile,
-		lastReloaded: now,
+		file:    newPwFile,
+		modTime: modTime,
 	}
 	auth.pw.Store(newPw)
 	auth.logger.Info("password file reloaded.")
 
-	return nil
-}
-
-func fileModTime(filename string) (time.Time, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("fileModTime(): can't open file %q: %w", filename, err)
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err != nil {
-		return time.Time{}, fmt.Errorf("fileModTime(): can't stat file %q: %w", filename, err)
-	}
-
-	return fi.ModTime(), nil
-}
-
-func (auth *BasicAuth) condReload() error {
-	reload := func() bool {
-		pwFileModTime, err := fileModTime(auth.pwFilename)
-		if err != nil {
-			auth.logger.Warning("can't get password file modtime: %v", err)
-			return true
-		}
-		return !pwFileModTime.Before(auth.pw.Load().lastReloaded)
-	}()
-	if reload {
-		return auth.reload()
-	}
 	return nil
 }
 
@@ -127,7 +108,7 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 		case <-auth.stopChan:
 			return
 		case <-ticker.C:
-			auth.condReload()
+			auth.reload()
 		}
 	}
 }
