@@ -9,23 +9,129 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
-type CertAuth struct{}
+type serialNumberSetFile struct {
+	file    *serialNumberSet
+	modTime time.Time
+}
 
-func (_ CertAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+type CertAuth struct {
+	blacklist         atomic.Pointer[serialNumberSetFile]
+	blacklistFilename string
+	logger            *clog.CondLogger
+	stopOnce          sync.Once
+	stopChan          chan struct{}
+}
+
+func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error) {
+	values, err := url.ParseQuery(param_url.RawQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	auth := &CertAuth{
+		blacklistFilename: values.Get("blacklist"),
+		logger:            logger,
+		stopChan:          make(chan struct{}),
+	}
+	auth.blacklist.Store(new(serialNumberSetFile))
+
+	if auth.blacklistFilename != "" {
+		if err := auth.reload(); err != nil {
+			return nil, fmt.Errorf("unable to load initial certificate blacklist: %w", err)
+		}
+	}
+
+	reloadInterval := 15 * time.Second
+	if reloadIntervalOption := values.Get("reload"); reloadIntervalOption != "" {
+		parsedInterval, err := time.ParseDuration(reloadIntervalOption)
+		if err != nil {
+			logger.Warning("unable to parse reload interval: %v. using default value.", err)
+		}
+		reloadInterval = parsedInterval
+	}
+	if reloadInterval > 0 {
+		go auth.reloadLoop(reloadInterval)
+	}
+
+	return auth, nil
+}
+
+func (auth *CertAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
 	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 || len(req.TLS.VerifiedChains[0]) < 1 {
+		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
+		return "", false
+	}
+	eeCert := req.TLS.VerifiedChains[0][0]
+	if auth.blacklist.Load().file.Has(eeCert.SerialNumber) {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 		return "", false
 	}
 	return fmt.Sprintf(
 		"Subject: %s, Serial Number: %s",
-		req.TLS.VerifiedChains[0][0].Subject.String(),
-		formatSerial(req.TLS.VerifiedChains[0][0].SerialNumber),
+		eeCert.Subject.String(),
+		formatSerial(eeCert.SerialNumber),
 	), true
 }
 
-func (_ CertAuth) Stop() {}
+func (auth *CertAuth) Stop() {
+	auth.stopOnce.Do(func() {
+		close(auth.stopChan)
+	})
+}
+
+func (auth *CertAuth) reload() error {
+	var oldModTime time.Time
+	if oldBL := auth.blacklist.Load(); oldBL != nil {
+		oldModTime = oldBL.modTime
+	}
+
+	f, modTime, err := openIfModified(auth.blacklistFilename, oldModTime)
+	if err != nil {
+		return err
+	}
+	if f == nil {
+		// no changes since last modTime
+		return nil
+	}
+
+	auth.logger.Info("reloading certificate blacklist from %q...", auth.blacklistFilename)
+	newBlacklistSet, err := newSerialNumberSetFromReader(f)
+	if err != nil {
+		return err
+	}
+
+	newBlacklist := &serialNumberSetFile{
+		file:    newBlacklistSet,
+		modTime: modTime,
+	}
+	auth.blacklist.Store(newBlacklist)
+	auth.logger.Info("blacklist file reloaded.")
+
+	return nil
+}
+
+func (auth *CertAuth) reloadLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-auth.stopChan:
+			return
+		case <-ticker.C:
+			if err := auth.reload(); err != nil {
+				auth.logger.Error("reload failed: %v", err)
+			}
+		}
+	}
+}
 
 // formatSerial from https://codereview.stackexchange.com/a/165708
 func formatSerial(serial *big.Int) string {
