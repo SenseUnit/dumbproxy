@@ -52,13 +52,13 @@ func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, 
 		return nil, fmt.Errorf("unable to load initial password list: %w", err)
 	}
 
-	reloadIntervalOption := values.Get("reload")
-	reloadInterval, err := time.ParseDuration(reloadIntervalOption)
-	if err != nil {
-		reloadInterval = 0
-	}
-	if reloadInterval == 0 {
-		reloadInterval = 15 * time.Second
+	reloadInterval := 15 * time.Second
+	if reloadIntervalOption := values.Get("reload"); reloadIntervalOption != "" {
+		parsedInterval, err := time.ParseDuration(reloadIntervalOption)
+		if err != nil {
+			logger.Warning("unable to parse reload interval: %v. using default value.", err)
+		}
+		reloadInterval = parsedInterval
 	}
 	if reloadInterval > 0 {
 		go auth.reloadLoop(reloadInterval)
@@ -108,7 +108,9 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 		case <-auth.stopChan:
 			return
 		case <-ticker.C:
-			auth.reload()
+			if err := auth.reload(); err != nil {
+				auth.logger.Error("reload failed: %v", err)
+			}
 		}
 	}
 }

@@ -26,7 +26,7 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 	case "basicfile":
 		return NewBasicFileAuth(url, logger)
 	case "cert":
-		return CertAuth{}, nil
+		return NewCertAuth(url, logger)
 	case "none":
 		return NoAuth{}, nil
 	default:
