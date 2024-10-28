@@ -128,7 +128,7 @@ func TestSerialNumberSetSmoke(t *testing.T) {
 			output: true,
 		},
 	}
-	s, err := newSerialNumberSetFromReader(strings.NewReader(testFile))
+	s, err := newSerialNumberSetFromReader(strings.NewReader(testFile), nil)
 	if err != nil {
 		t.Fatalf("unable to load test set: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestSerialNumberSetEmpty(t *testing.T) {
 			output: false,
 		},
 	}
-	s, err := newSerialNumberSetFromReader(strings.NewReader(testFile))
+	s, err := newSerialNumberSetFromReader(strings.NewReader(testFile), nil)
 	if err != nil {
 		t.Fatalf("unable to load test set: %v", err)
 	}
