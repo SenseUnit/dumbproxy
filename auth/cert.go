@@ -103,7 +103,9 @@ func (auth *CertAuth) reload() error {
 	}
 
 	auth.logger.Info("reloading certificate blacklist from %q...", auth.blacklistFilename)
-	newBlacklistSet, err := newSerialNumberSetFromReader(f)
+	newBlacklistSet, err := newSerialNumberSetFromReader(f, func(parseErr error) {
+		auth.logger.Error("failed to parse line in %q: %v", auth.blacklistFilename, parseErr)
+	})
 	if err != nil {
 		return err
 	}
@@ -171,7 +173,7 @@ func (s *serialNumberSet) Has(serial *big.Int) bool {
 	return found
 }
 
-func newSerialNumberSetFromReader(r io.Reader) (*serialNumberSet, error) {
+func newSerialNumberSetFromReader(r io.Reader, bad func(error)) (*serialNumberSet, error) {
 	set := make(map[serialNumberKey]struct{})
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
@@ -182,6 +184,9 @@ func newSerialNumberSetFromReader(r io.Reader) (*serialNumberSet, error) {
 		}
 		serial, err := parseSerialBytes(line)
 		if err != nil {
+			if bad != nil {
+				bad(fmt.Errorf("bad serial number line %q: %w", line, err))
+			}
 			continue
 		}
 		set[normalizeSNBytes(serial)] = struct{}{}
