@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/tg123/go-htpasswd v1.2.2
+	github.com/tg123/go-htpasswd v1.2.3
 	golang.org/x/crypto v0.28.0
 	golang.org/x/net v0.30.0
 )
@@ -17,5 +17,3 @@ require (
 	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
 )
-
-replace github.com/tg123/go-htpasswd => github.com/Snawoot/go-htpasswd v0.0.0-20241027154052-1c3584e06a69
