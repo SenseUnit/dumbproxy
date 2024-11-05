@@ -44,7 +44,7 @@ docker run -d \
     -p 8080:8080 \
     --restart unless-stopped \
     --name dumbproxy \
-    ghcr.io/senseunit/dumbproxy
+    ghcr.io/senseunit/dumbproxy -auth 'static://?username=admin&password=123456'
 ```
 
 #### Snap Store
