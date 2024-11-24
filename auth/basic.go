@@ -120,6 +120,7 @@ func matchHiddenDomain(host, hidden_domain string) bool {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
+	host = strings.ToLower(host)
 	return subtle.ConstantTimeCompare([]byte(host), []byte(hidden_domain)) == 1
 }
 
