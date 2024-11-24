@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -115,10 +116,17 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 	}
 }
 
+func matchHiddenDomain(host, hidden_domain string) bool {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return subtle.ConstantTimeCompare([]byte(host), []byte(hidden_domain)) == 1
+}
+
 func requireBasicAuth(wr http.ResponseWriter, req *http.Request, hidden_domain string) {
 	if hidden_domain != "" &&
-		(subtle.ConstantTimeCompare([]byte(req.URL.Host), []byte(hidden_domain)) != 1 &&
-			subtle.ConstantTimeCompare([]byte(req.Host), []byte(hidden_domain)) != 1) {
+		!matchHiddenDomain(req.URL.Host, hidden_domain) &&
+		!matchHiddenDomain(req.Host, hidden_domain) {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 	} else {
 		wr.Header().Set("Proxy-Authenticate", `Basic realm="dumbproxy"`)
