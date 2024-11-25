@@ -25,6 +25,8 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 		return NewStaticAuth(url, logger)
 	case "basicfile":
 		return NewBasicFileAuth(url, logger)
+	case "hmac":
+		return NewHMACAuth(url, logger)
 	case "cert":
 		return NewCertAuth(url, logger)
 	case "none":
