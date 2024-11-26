@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -139,6 +144,8 @@ type CLIArgs struct {
 	autocertHTTP      string
 	passwd            string
 	passwdCost        int
+	hmacSign          bool
+	hmacGenKey        bool
 	positionalArgs    []string
 	proxy             []string
 	sourceIPHints     string
@@ -173,6 +180,9 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
 		"Username and password can be passed as positional arguments or requested interactively")
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
+	flag.BoolVar(&args.hmacSign, "hmac-sign", false, "sign username with specified key for given validity period. "+
+		"Positional arguments are: hex-encoded HMAC key, username, validity duration.")
+	flag.BoolVar(&args.hmacGenKey, "hmac-genkey", false, "generate hex-encoded HMAC signing key of optimal length")
 	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
 		args.proxy = append(args.proxy, p)
 		return nil
@@ -202,6 +212,20 @@ func run() int {
 	if args.passwd != "" {
 		if err := passwd(args.passwd, args.passwdCost, args.positionalArgs...); err != nil {
 			log.Fatalf("can't set password: %v", err)
+		}
+		return 0
+	}
+
+	if args.hmacSign {
+		if err := hmacSign(args.positionalArgs...); err != nil {
+			log.Fatalf("can't sign: %v", err)
+		}
+		return 0
+	}
+
+	if args.hmacGenKey {
+		if err := hmacGenKey(); err != nil {
+			log.Fatalf("can't generate key: %v", err)
 		}
 		return 0
 	}
@@ -455,6 +479,53 @@ func passwd(filename string, cost int, args ...string) error {
 		return fmt.Errorf("can't write to file: %w", err)
 	}
 
+	return nil
+}
+
+func hmacSign(args ...string) error {
+	if len(args) != 3 {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "dumbproxy -hmac-sign <HMAC key> <username> <validity duration>")
+		fmt.Fprintln(os.Stderr, "")
+		return errors.New("bad command line arguments")
+	}
+
+	secret, err := hex.DecodeString(args[0])
+	if err != nil {
+		return fmt.Errorf("unable to hex-decode HMAC secret: %w", err)
+	}
+
+	validity, err := time.ParseDuration(args[2])
+	if err != nil {
+		return fmt.Errorf("unable to parse validity duration: %w", err)
+	}
+
+	expire := time.Now().Add(validity).Unix()
+	mac := auth.CalculateHMACSignature(secret, args[1], expire)
+	token := auth.HMACToken{
+		Expire: expire,
+	}
+	copy(token.Signature[:], mac)
+
+	var resBuf bytes.Buffer
+	enc := base64.NewEncoder(base64.RawURLEncoding, &resBuf)
+	if err := binary.Write(enc, binary.BigEndian, &token); err != nil {
+		return fmt.Errorf("token encoding failed: %w", err)
+	}
+	enc.Close()
+
+	fmt.Println("Username:", args[1])
+	fmt.Println("Password:", resBuf.String())
+	return nil
+}
+
+func hmacGenKey(args ...string) error {
+	buf := make([]byte, auth.HMACSignatureSize)
+	if _, err := rand.Read(buf); err != nil {
+		return fmt.Errorf("CSPRNG failure: %w", err)
+	}
+	fmt.Println(hex.EncodeToString(buf))
 	return nil
 }
 
