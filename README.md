@@ -163,8 +163,8 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `path` - location of file with login and password pairs. File format is similar to htpasswd files. Each line must be in form `<username>:<bcrypt hash of password>`. Empty lines and lines starting with `#` are ignored.
   * `hidden_domain` - same as in `static` provider
   * `reload` - interval for conditional password file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
-* `hmac` - authentication with HMAC-signatures passed as username and password via basic authentication scheme. In that scheme username represents user login as usual and password should be constructed as follows: *password := urlsafe\_base64\_without\_padding(expire\_timestamp || hmac\_sha256(secret, "dumbproxy grant token v1" || username || expire\_timestamp))*, where *expire_timestamp* is 64-bit big-endian UNIX timestamp and *||* is a concatenation operator. [This Python script](https://gist.github.com/Snawoot/2b5acc232680d830f0f308f14e540f1d) can be used a reference implementation of signing. 
-  * `secret` - hex-encoded HMAC secret key. Alternatively it can be specified by `DUMBPROXY_HMAC_SECRET` environment variable. Secret key can be generated with command like this: `openssl rand -hex 32`.
+* `hmac` - authentication with HMAC-signatures passed as username and password via basic authentication scheme. In that scheme username represents user login as usual and password should be constructed as follows: *password := urlsafe\_base64\_without\_padding(expire\_timestamp || hmac\_sha256(secret, "dumbproxy grant token v1" || username || expire\_timestamp))*, where *expire_timestamp* is 64-bit big-endian UNIX timestamp and *||* is a concatenation operator. [This Python script](https://gist.github.com/Snawoot/2b5acc232680d830f0f308f14e540f1d) can be used a reference implementation of signing. Dumbproxy itself also provides built-in signer: `dumbproxy -hmac-sign <HMAC key> <username> <validity duration>`.
+  * `secret` - hex-encoded HMAC secret key. Alternatively it can be specified by `DUMBPROXY_HMAC_SECRET` environment variable. Secret key can be generated with command like this: `openssl rand -hex 32` or `dumbproxy -hmac-genkey`.
   * `hidden_domain` - same as in `static` provider
 * `cert` - use mutual TLS authentication with client certificates. In order to use this auth provider server must listen sockert in TLS mode (`-cert` and `-key` options) and client CA file must be specified (`-cacert`). Example: `cert://`.
   * `blacklist` - location of file with list of serial numbers of blocked certificates, one per each line in form of hex-encoded colon-separated bytes. Example: `ab:01:02:03`. Empty lines and comments starting with `#` are ignored.
@@ -199,6 +199,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	colon-separated list of enabled ciphers
   -disable-http2
     	disable HTTP2
+  -hmac-genkey
+    	generate hex-encoded HMAC signing key of optimal length
+  -hmac-sign
+    	sign username with specified key for given validity period. Positional arguments are: hex-encoded HMAC key, username, validity duration.
   -ip-hints string
     	a comma-separated list of source addresses to use on dial attempts. "$lAddr" gets expanded to local address of connection. Example: "10.0.0.1,fe80::2,$lAddr,0.0.0.0,::"
   -key string
