@@ -79,11 +79,7 @@ func (auth *HMACAuth) validateToken(login, password string) bool {
 		return false
 	}
 
-	mac := hmac.New(sha256.New, auth.secret)
-	mac.Write([]byte(HMACSignaturePrefix))
-	mac.Write([]byte(login))
-	binary.Write(mac, binary.BigEndian, token.Expire)
-	expectedMAC := mac.Sum(nil)
+	expectedMAC := CalculateHMACSignature(auth.secret, login, token.Expire)
 	return hmac.Equal(token.Signature[:], expectedMAC)
 }
 
@@ -135,4 +131,12 @@ func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (strin
 }
 
 func (auth *HMACAuth) Stop() {
+}
+
+func CalculateHMACSignature(secret []byte, username string, expire int64) []byte {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(HMACSignaturePrefix))
+	mac.Write([]byte(username))
+	binary.Write(mac, binary.BigEndian, expire)
+	return mac.Sum(nil)
 }
