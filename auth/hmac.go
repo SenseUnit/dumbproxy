@@ -63,7 +63,7 @@ type HMACToken struct {
 	Signature [HMACSignatureSize]byte
 }
 
-func (auth *HMACAuth) validateToken(login, password string) bool {
+func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 	marshaledToken, err := base64.RawURLEncoding.DecodeString(password)
 	if err != nil {
 		return false
@@ -79,7 +79,7 @@ func (auth *HMACAuth) validateToken(login, password string) bool {
 		return false
 	}
 
-	expectedMAC := CalculateHMACSignature(auth.secret, login, token.Expire)
+	expectedMAC := CalculateHMACSignature(secret, login, token.Expire)
 	return hmac.Equal(token.Signature[:], expectedMAC)
 }
 
@@ -111,7 +111,7 @@ func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (strin
 	login := pair[0]
 	password := pair[1]
 
-	if auth.validateToken(login, password) {
+	if VerifyHMACLoginAndPassword(auth.secret, login, password) {
 		if auth.hiddenDomain != "" &&
 			(req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
 			wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_TRIGGERED_MSG))))
