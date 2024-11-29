@@ -63,7 +63,7 @@ type HMACToken struct {
 	Signature [HMACSignatureSize]byte
 }
 
-func (auth *HMACAuth) validateToken(login, password string) bool {
+func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 	marshaledToken, err := base64.RawURLEncoding.DecodeString(password)
 	if err != nil {
 		return false
@@ -79,8 +79,12 @@ func (auth *HMACAuth) validateToken(login, password string) bool {
 		return false
 	}
 
-	expectedMAC := CalculateHMACSignature(auth.secret, login, token.Expire)
+	expectedMAC := CalculateHMACSignature(secret, login, token.Expire)
 	return hmac.Equal(token.Signature[:], expectedMAC)
+}
+
+func (auth *HMACAuth) validateToken(login, password string) bool {
+	return VerifyHMACLoginAndPassword(auth.secret, login, password)
 }
 
 func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
