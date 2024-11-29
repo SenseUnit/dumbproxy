@@ -83,10 +83,6 @@ func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 	return hmac.Equal(token.Signature[:], expectedMAC)
 }
 
-func (auth *HMACAuth) validateToken(login, password string) bool {
-	return VerifyHMACLoginAndPassword(auth.secret, login, password)
-}
-
 func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
@@ -115,7 +111,7 @@ func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (strin
 	login := pair[0]
 	password := pair[1]
 
-	if auth.validateToken(login, password) {
+	if VerifyHMACLoginAndPassword(auth.secret, login, password) {
 		if auth.hiddenDomain != "" &&
 			(req.Host == auth.hiddenDomain || req.URL.Host == auth.hiddenDomain) {
 			wr.Header().Set("Content-Length", strconv.Itoa(len([]byte(AUTH_TRIGGERED_MSG))))
