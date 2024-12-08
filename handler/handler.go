@@ -48,7 +48,7 @@ func NewProxyHandler(timeout time.Duration, auth auth.Auth, dialer HandlerDialer
 	}
 }
 
-func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
+func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
 	ctx, _ := context.WithTimeout(req.Context(), s.timeout)
 	conn, err := s.dialer.DialContext(ctx, "tcp", req.RequestURI)
 	if err != nil {
@@ -81,12 +81,12 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 		// Inform client connection is built
 		fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
 
-		proxy(req.Context(), localconn, conn)
+		PairConnections(req.Context(), username, localconn, conn)
 	} else if req.ProtoMajor == 2 {
 		wr.Header()["Date"] = nil
 		wr.WriteHeader(http.StatusOK)
 		flush(wr)
-		proxyh2(req.Context(), req.Body, wr, conn)
+		PairConnections(req.Context(), username, wrapH2(req.Body, wr), conn)
 	} else {
 		s.logger.Error("Unsupported protocol version: %s", req.Proto)
 		http.Error(wr, "Unsupported protocol version.", http.StatusBadRequest)
@@ -94,8 +94,14 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) {
+func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, username string) {
 	req.RequestURI = ""
+	forwardReqBody := newH1ReqBodyPipe()
+	origBody := req.Body
+	req.Body = forwardReqBody.Body()
+	go func() {
+		PairConnections(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody)
+	}()
 	if req.ProtoMajor == 2 {
 		req.URL.Scheme = "http" // We can't access :scheme pseudo-header, so assume http
 		req.URL.Host = req.Host
@@ -112,7 +118,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
 	copyHeader(wr.Header(), resp.Header)
 	wr.WriteHeader(resp.StatusCode)
 	flush(wr)
-	copyBody(wr, resp.Body)
+	PairConnections(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
 }
 
 func (s *ProxyHandler) isLoopback(req *http.Request) (string, bool) {
@@ -160,9 +166,9 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	req = req.WithContext(newCtx)
 	delHopHeaders(req.Header)
 	if isConnect {
-		s.HandleTunnel(wr, req)
+		s.HandleTunnel(wr, req, username)
 	} else {
-		s.HandleRequest(wr, req)
+		s.HandleRequest(wr, req, username)
 	}
 }
 

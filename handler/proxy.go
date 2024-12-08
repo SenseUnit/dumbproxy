@@ -7,67 +7,10 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 )
 
 const COPY_BUF = 128 * 1024
-
-func proxy(ctx context.Context, left, right net.Conn) {
-	wg := sync.WaitGroup{}
-	cpy := func(dst, src net.Conn) {
-		defer wg.Done()
-		io.Copy(dst, src)
-		dst.Close()
-	}
-	wg.Add(2)
-	go cpy(left, right)
-	go cpy(right, left)
-	groupdone := make(chan struct{}, 1)
-	go func() {
-		wg.Wait()
-		groupdone <- struct{}{}
-	}()
-	select {
-	case <-ctx.Done():
-		left.Close()
-		right.Close()
-	case <-groupdone:
-		return
-	}
-	<-groupdone
-	return
-}
-
-func proxyh2(ctx context.Context, leftreader io.ReadCloser, leftwriter io.Writer, right net.Conn) {
-	wg := sync.WaitGroup{}
-	ltr := func(dst net.Conn, src io.Reader) {
-		defer wg.Done()
-		io.Copy(dst, src)
-		dst.Close()
-	}
-	rtl := func(dst io.Writer, src io.Reader) {
-		defer wg.Done()
-		copyBody(dst, src)
-	}
-	wg.Add(2)
-	go ltr(right, leftreader)
-	go rtl(leftwriter, right)
-	groupdone := make(chan struct{}, 1)
-	go func() {
-		wg.Wait()
-		groupdone <- struct{}{}
-	}()
-	select {
-	case <-ctx.Done():
-		leftreader.Close()
-		right.Close()
-	case <-groupdone:
-		return
-	}
-	<-groupdone
-	return
-}
 
 // Hop-by-hop headers. These are removed when sent to the backend.
 // http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
@@ -124,17 +67,54 @@ func flush(flusher interface{}) bool {
 	return true
 }
 
-func copyBody(wr io.Writer, body io.Reader) {
-	buf := make([]byte, COPY_BUF)
-	for {
-		bread, read_err := body.Read(buf)
-		var write_err error
-		if bread > 0 {
-			_, write_err = wr.Write(buf[:bread])
-			flush(wr)
-		}
-		if read_err != nil || write_err != nil {
-			break
+func copyAndCloseWrite(dst io.WriteCloser, src io.ReadCloser) error {
+	_, err := io.Copy(dst, src)
+	if closeWriter, ok := dst.(interface {
+		CloseWrite() error
+	}); ok {
+		closeWriter.CloseWrite()
+	} else {
+		dst.Close()
+	}
+	return err
+}
+
+func futureCopyAndCloseWrite(c chan<- error, dst io.WriteCloser, src io.ReadCloser) {
+	c <- copyAndCloseWrite(dst, src)
+	close(c)
+}
+
+func PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error {
+	var err error
+	i2oErr := make(chan error, 1)
+	o2iErr := make(chan error, 1)
+	ctxErr := ctx.Done()
+
+	go futureCopyAndCloseWrite(i2oErr, outgoing, incoming)
+	go futureCopyAndCloseWrite(o2iErr, incoming, outgoing)
+
+	// do while we're listening to children channels
+	for i2oErr != nil || o2iErr != nil {
+		select {
+		case e := <-i2oErr:
+			if err == nil {
+				err = e
+			}
+			i2oErr = nil // unsubscribe
+		case e := <-o2iErr:
+			if err == nil {
+				err = e
+			}
+			o2iErr = nil // unsubscribe
+		case <-ctxErr:
+			if err == nil {
+				err = ctx.Err()
+			}
+			ctxErr = nil // unsubscribe
+			incoming.Close()
+			outgoing.Close()
 		}
 	}
+
+	return err
 }
