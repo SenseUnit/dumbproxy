@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
@@ -21,7 +20,6 @@ type HandlerDialer interface {
 }
 
 type ProxyHandler struct {
-	timeout       time.Duration
 	auth          auth.Auth
 	logger        *clog.CondLogger
 	dialer        HandlerDialer
@@ -31,26 +29,23 @@ type ProxyHandler struct {
 	userIPHints   bool
 }
 
-func NewProxyHandler(timeout time.Duration, auth auth.Auth, dialer HandlerDialer,
-	userIPHints bool, logger *clog.CondLogger) *ProxyHandler {
+func NewProxyHandler(config *Config) *ProxyHandler {
 	httptransport := &http.Transport{
-		DialContext:       dialer.DialContext,
+		DialContext:       config.Dialer.DialContext,
 		DisableKeepAlives: true,
 	}
 	return &ProxyHandler{
-		timeout:       timeout,
-		auth:          auth,
-		logger:        logger,
-		dialer:        dialer,
+		auth:          config.Auth,
+		logger:        config.Logger,
+		dialer:        config.Dialer,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
-		userIPHints:   userIPHints,
+		userIPHints:   config.UserIPHints,
 	}
 }
 
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
-	ctx, _ := context.WithTimeout(req.Context(), s.timeout)
-	conn, err := s.dialer.DialContext(ctx, "tcp", req.RequestURI)
+	conn, err := s.dialer.DialContext(req.Context(), "tcp", req.RequestURI)
 	if err != nil {
 		s.logger.Error("Can't satisfy CONNECT request: %v", err)
 		http.Error(wr, "Can't satisfy CONNECT request", http.StatusBadGateway)

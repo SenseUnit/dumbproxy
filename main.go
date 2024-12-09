@@ -262,12 +262,12 @@ func run() int {
 
 	server := http.Server{
 		Addr: args.bind_address,
-		Handler: handler.NewProxyHandler(
-			args.timeout,
-			auth,
-			dialer.MaybeWrapWithContextDialer(d),
-			args.userIPHints,
-			proxyLogger),
+		Handler: handler.NewProxyHandler(&handler.Config{
+			Dialer:      dialer.MaybeWrapWithContextDialer(d),
+			Auth:        auth,
+			Logger:      proxyLogger,
+			UserIPHints: args.userIPHints,
+		}),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,
