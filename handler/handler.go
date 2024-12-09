@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
@@ -21,7 +20,6 @@ type HandlerDialer interface {
 }
 
 type ProxyHandler struct {
-	timeout       time.Duration
 	auth          auth.Auth
 	logger        *clog.CondLogger
 	dialer        HandlerDialer
@@ -31,26 +29,23 @@ type ProxyHandler struct {
 	userIPHints   bool
 }
 
-func NewProxyHandler(timeout time.Duration, auth auth.Auth, dialer HandlerDialer,
-	userIPHints bool, logger *clog.CondLogger) *ProxyHandler {
+func NewProxyHandler(config *Config) *ProxyHandler {
 	httptransport := &http.Transport{
-		DialContext:       dialer.DialContext,
+		DialContext:       config.Dialer.DialContext,
 		DisableKeepAlives: true,
 	}
 	return &ProxyHandler{
-		timeout:       timeout,
-		auth:          auth,
-		logger:        logger,
-		dialer:        dialer,
+		auth:          config.Auth,
+		logger:        config.Logger,
+		dialer:        config.Dialer,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
-		userIPHints:   userIPHints,
+		userIPHints:   config.UserIPHints,
 	}
 }
 
-func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
-	ctx, _ := context.WithTimeout(req.Context(), s.timeout)
-	conn, err := s.dialer.DialContext(ctx, "tcp", req.RequestURI)
+func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
+	conn, err := s.dialer.DialContext(req.Context(), "tcp", req.RequestURI)
 	if err != nil {
 		s.logger.Error("Can't satisfy CONNECT request: %v", err)
 		http.Error(wr, "Can't satisfy CONNECT request", http.StatusBadGateway)
@@ -81,12 +76,12 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 		// Inform client connection is built
 		fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
 
-		proxy(req.Context(), localconn, conn)
+		PairConnections(req.Context(), username, localconn, conn)
 	} else if req.ProtoMajor == 2 {
 		wr.Header()["Date"] = nil
 		wr.WriteHeader(http.StatusOK)
 		flush(wr)
-		proxyh2(req.Context(), req.Body, wr, conn)
+		PairConnections(req.Context(), username, wrapH2(req.Body, wr), conn)
 	} else {
 		s.logger.Error("Unsupported protocol version: %s", req.Proto)
 		http.Error(wr, "Unsupported protocol version.", http.StatusBadRequest)
@@ -94,8 +89,14 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) {
+func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, username string) {
 	req.RequestURI = ""
+	forwardReqBody := newH1ReqBodyPipe()
+	origBody := req.Body
+	req.Body = forwardReqBody.Body()
+	go func() {
+		PairConnections(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody)
+	}()
 	if req.ProtoMajor == 2 {
 		req.URL.Scheme = "http" // We can't access :scheme pseudo-header, so assume http
 		req.URL.Host = req.Host
@@ -112,7 +113,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request) 
 	copyHeader(wr.Header(), resp.Header)
 	wr.WriteHeader(resp.StatusCode)
 	flush(wr)
-	copyBody(wr, resp.Body)
+	PairConnections(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
 }
 
 func (s *ProxyHandler) isLoopback(req *http.Request) (string, bool) {
@@ -160,9 +161,9 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	req = req.WithContext(newCtx)
 	delHopHeaders(req.Header)
 	if isConnect {
-		s.HandleTunnel(wr, req)
+		s.HandleTunnel(wr, req, username)
 	} else {
-		s.HandleRequest(wr, req)
+		s.HandleRequest(wr, req, username)
 	}
 }
 

@@ -130,7 +130,6 @@ type CLIArgs struct {
 	bind_address      string
 	auth              string
 	verbosity         int
-	timeout           time.Duration
 	cert, key, cafile string
 	list_ciphers      bool
 	ciphers           string
@@ -163,7 +162,6 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
-	flag.DurationVar(&args.timeout, "timeout", 10*time.Second, "timeout for network operations")
 	flag.StringVar(&args.cert, "cert", "", "enable TLS and use certificate")
 	flag.StringVar(&args.key, "key", "", "key for TLS certificate")
 	flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
@@ -262,12 +260,12 @@ func run() int {
 
 	server := http.Server{
 		Addr: args.bind_address,
-		Handler: handler.NewProxyHandler(
-			args.timeout,
-			auth,
-			dialer.MaybeWrapWithContextDialer(d),
-			args.userIPHints,
-			proxyLogger),
+		Handler: handler.NewProxyHandler(&handler.Config{
+			Dialer:      dialer.MaybeWrapWithContextDialer(d),
+			Auth:        auth,
+			Logger:      proxyLogger,
+			UserIPHints: args.userIPHints,
+		}),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
 		ReadHeaderTimeout: 0,

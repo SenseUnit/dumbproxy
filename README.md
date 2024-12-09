@@ -219,8 +219,6 @@ Usage of /home/user/go/bin/dumbproxy:
     	bcrypt password cost (for -passwd mode) (default 4)
   -proxy value
     	upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443
-  -timeout duration
-    	timeout for network operations (default 10s)
   -user-ip-hints
     	allow IP hints to be specified by user in X-Src-IP-Hints header
   -verbosity int
