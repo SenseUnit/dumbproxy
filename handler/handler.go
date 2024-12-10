@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -30,14 +32,26 @@ type ProxyHandler struct {
 }
 
 func NewProxyHandler(config *Config) *ProxyHandler {
+	d := config.Dialer
+	if d == nil {
+		d = dialer.NewBoundDialer(nil, "")
+	}
 	httptransport := &http.Transport{
-		DialContext:       config.Dialer.DialContext,
+		DialContext:       d.DialContext,
 		DisableKeepAlives: true,
 	}
+	a := config.Auth
+	if a == nil {
+		a = auth.NoAuth{}
+	}
+	l := config.Logger
+	if l == nil {
+		l = clog.NewCondLogger(log.New(io.Discard, "", 0), 0)
+	}
 	return &ProxyHandler{
-		auth:          config.Auth,
-		logger:        config.Logger,
-		dialer:        config.Dialer,
+		auth:          a,
+		logger:        l,
+		dialer:        d,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
 		userIPHints:   config.UserIPHints,
