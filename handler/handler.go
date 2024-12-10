@@ -25,6 +25,7 @@ type ProxyHandler struct {
 	auth          auth.Auth
 	logger        *clog.CondLogger
 	dialer        HandlerDialer
+	forward       func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error
 	httptransport http.RoundTripper
 	outbound      map[string]string
 	outboundMux   sync.RWMutex
@@ -48,10 +49,15 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 	if l == nil {
 		l = clog.NewCondLogger(log.New(io.Discard, "", 0), 0)
 	}
+	f := config.Forward
+	if f == nil {
+		f = PairConnections
+	}
 	return &ProxyHandler{
 		auth:          a,
 		logger:        l,
 		dialer:        d,
+		forward:       f,
 		httptransport: httptransport,
 		outbound:      make(map[string]string),
 		userIPHints:   config.UserIPHints,
@@ -90,12 +96,12 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 		// Inform client connection is built
 		fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
 
-		PairConnections(req.Context(), username, localconn, conn)
+		s.forward(req.Context(), username, localconn, conn)
 	} else if req.ProtoMajor == 2 {
 		wr.Header()["Date"] = nil
 		wr.WriteHeader(http.StatusOK)
 		flush(wr)
-		PairConnections(req.Context(), username, wrapH2(req.Body, wr), conn)
+		s.forward(req.Context(), username, wrapH2(req.Body, wr), conn)
 	} else {
 		s.logger.Error("Unsupported protocol version: %s", req.Proto)
 		http.Error(wr, "Unsupported protocol version.", http.StatusBadRequest)
@@ -109,7 +115,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	origBody := req.Body
 	req.Body = forwardReqBody.Body()
 	go func() {
-		PairConnections(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody)
+		s.forward(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody)
 	}()
 	if req.ProtoMajor == 2 {
 		req.URL.Scheme = "http" // We can't access :scheme pseudo-header, so assume http
@@ -127,7 +133,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	copyHeader(wr.Header(), resp.Header)
 	wr.WriteHeader(resp.StatusCode)
 	flush(wr)
-	PairConnections(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
+	s.forward(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
 }
 
 func (s *ProxyHandler) isLoopback(req *http.Request) (string, bool) {
