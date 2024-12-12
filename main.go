@@ -28,6 +28,7 @@ import (
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
+	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
@@ -151,6 +152,9 @@ type CLIArgs struct {
 	userIPHints       bool
 	minTLSVersion     TLSVersionArg
 	maxTLSVersion     TLSVersionArg
+	bwLimit           uint64
+	bwBuckets         uint
+	bwSeparate        bool
 }
 
 func parse_args() CLIArgs {
@@ -189,6 +193,9 @@ func parse_args() CLIArgs {
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimal TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
+	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
+	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
+	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -258,6 +265,15 @@ func run() int {
 		d = newDialer
 	}
 
+	forwarder := forward.PairConnections
+	if args.bwLimit != 0 {
+		forwarder = forward.NewBWLimit(
+			float64(args.bwLimit),
+			args.bwBuckets,
+			args.bwSeparate,
+		).PairConnections
+	}
+
 	server := http.Server{
 		Addr: args.bind_address,
 		Handler: handler.NewProxyHandler(&handler.Config{
@@ -265,6 +281,7 @@ func run() int {
 			Auth:        auth,
 			Logger:      proxyLogger,
 			UserIPHints: args.userIPHints,
+			Forward:     forwarder,
 		}),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
