@@ -22,10 +22,10 @@ type HTTPProxyDialer struct {
 	address  string
 	tls      bool
 	userinfo *url.Userinfo
-	next     ContextDialer
+	next     Dialer
 }
 
-func NewHTTPProxyDialer(address string, tls bool, userinfo *url.Userinfo, next Dialer) *HTTPProxyDialer {
+func NewHTTPProxyDialer(address string, tls bool, userinfo *url.Userinfo, next LegacyDialer) *HTTPProxyDialer {
 	return &HTTPProxyDialer{
 		address:  address,
 		tls:      tls,

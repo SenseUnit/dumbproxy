@@ -206,6 +206,7 @@ func parse_args() CLIArgs {
 func run() int {
 	args := parse_args()
 
+	// handle special invocation modes
 	if args.showVersion {
 		fmt.Println(version)
 		return 0
@@ -237,6 +238,7 @@ func run() int {
 		return 0
 	}
 
+	// setup logging
 	logWriter := clog.NewLogWriter(os.Stderr)
 	defer logWriter.Close()
 
@@ -250,6 +252,7 @@ func run() int {
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
 
+	// setup auth provider
 	auth, err := auth.NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
@@ -257,6 +260,7 @@ func run() int {
 	}
 	defer auth.Stop()
 
+	// construct dialers
 	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	for _, proxyURL := range args.proxy {
 		newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
@@ -267,6 +271,7 @@ func run() int {
 		d = newDialer
 	}
 
+	// handler requisites
 	forwarder := forward.PairConnections
 	if args.bwLimit != 0 {
 		forwarder = forward.NewBWLimit(
@@ -279,7 +284,7 @@ func run() int {
 	server := http.Server{
 		Addr: args.bind_address,
 		Handler: handler.NewProxyHandler(&handler.Config{
-			Dialer:      dialer.MaybeWrapWithContextDialer(d),
+			Dialer:      d,
 			Auth:        auth,
 			Logger:      proxyLogger,
 			UserIPHints: args.userIPHints,
@@ -292,6 +297,7 @@ func run() int {
 		IdleTimeout:       0,
 	}
 
+	// listener setup
 	if args.disableHTTP2 {
 		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 	}
@@ -358,6 +364,8 @@ func run() int {
 		listener = tls.NewListener(listener, cfg)
 	}
 	mainLogger.Info("Proxy server started.")
+
+	// setup done
 	err = server.Serve(listener)
 	mainLogger.Critical("Server terminated with a reason: %v", err)
 	mainLogger.Info("Shutting down...")
