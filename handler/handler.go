@@ -12,6 +12,7 @@ import (
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
+	"github.com/SenseUnit/dumbproxy/forward"
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
@@ -51,7 +52,7 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 	}
 	f := config.Forward
 	if f == nil {
-		f = PairConnections
+		f = forward.PairConnections
 	}
 	return &ProxyHandler{
 		auth:          a,

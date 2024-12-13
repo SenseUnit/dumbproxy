@@ -12,10 +12,14 @@ Dumbest HTTP proxy ever.
 * Zero-configuration
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
+  * Via auto-reloaded NCSA httpd-style passwords file
+  * Via static login and password
+  * Via HMAC signatures provisioned by central authority (e.g. some webservice)
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
-* Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
-* Supports client authentication with client TLS certificates
-* Supports HTTP/2
+  * Supports client authentication with client TLS certificates
+  * Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
+* Per-user bandwidth limits
+* HTTP/2 support
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 * systemd socket activation
@@ -191,6 +195,12 @@ Usage of /home/user/go/bin/dumbproxy:
     	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
+  -bw-limit uint
+    	per-user bandwidth limit in bytes per second
+  -bw-limit-buckets uint
+    	number of buckets of bandwidth limit (default 1048576)
+  -bw-limit-separate
+    	separate upload and download bandwidth limits
   -cafile string
     	CA file to authenticate clients with certificates
   -cert string
