@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -155,6 +156,7 @@ type CLIArgs struct {
 	bwLimit           uint64
 	bwBuckets         uint
 	bwSeparate        bool
+	connTimeLimit     time.Duration
 }
 
 func parse_args() CLIArgs {
@@ -196,6 +198,7 @@ func parse_args() CLIArgs {
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
+	flag.DurationVar(&args.connTimeLimit, "conn-time-limit", 6*time.Hour, "hard time limit for connections")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -265,6 +268,14 @@ func run() int {
 		d = newDialer
 	}
 
+	var srvConnContext func(ctx context.Context, c net.Conn) context.Context
+	if args.connTimeLimit > 0 {
+		srvConnContext = func(ctx context.Context, c net.Conn) context.Context {
+			newCtx, _ := context.WithTimeout(ctx, args.connTimeLimit)
+			return newCtx
+		}
+	}
+
 	forwarder := forward.PairConnections
 	if args.bwLimit != 0 {
 		forwarder = forward.NewBWLimit(
@@ -288,6 +299,7 @@ func run() int {
 		ReadHeaderTimeout: 0,
 		WriteTimeout:      0,
 		IdleTimeout:       0,
+		ConnContext:       srvConnContext,
 	}
 
 	if args.disableHTTP2 {
