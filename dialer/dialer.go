@@ -67,6 +67,8 @@ func (wd wrappedDialer) DialContext(ctx context.Context, network, address string
 	return conn, err
 }
 
+var _ HostnameWanter = new(BoundDialer)
+
 func MaybeWrapWithContextDialer(d LegacyDialer) Dialer {
 	if xd, ok := d.(Dialer); ok {
 		return xd

@@ -262,13 +262,16 @@ func run() int {
 
 	// construct dialers
 	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
-	for _, proxyURL := range args.proxy {
-		newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
-		if err != nil {
-			mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
-			return 3
+	if len(args.proxy) > 0 {
+		for _, proxyURL := range args.proxy {
+			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
+			if err != nil {
+				mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
+				return 3
+			}
+			d = newDialer
 		}
-		d = newDialer
+		d = dialer.AlwaysRequireHostname(d)
 	}
 
 	// handler requisites

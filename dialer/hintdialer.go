@@ -23,16 +23,12 @@ type BoundDialerContextValue struct {
 	LocalAddr string
 }
 
-type BoundDialerDefaultSink interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
-}
-
 type BoundDialer struct {
-	defaultDialer BoundDialerDefaultSink
+	defaultDialer Dialer
 	defaultHints  string
 }
 
-func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints string) *BoundDialer {
+func NewBoundDialer(defaultDialer Dialer, defaultHints string) *BoundDialer {
 	if defaultDialer == nil {
 		defaultDialer = &net.Dialer{}
 	}
@@ -105,6 +101,17 @@ func (d *BoundDialer) DialContext(ctx context.Context, network, address string) 
 func (d *BoundDialer) Dial(network, address string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, address)
 }
+
+func (d *BoundDialer) WantsHostname(ctx context.Context, net, address string) bool {
+	switch net {
+	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6", "ip", "ip4", "ip6":
+		return false
+	default:
+		return WantsHostname(ctx, net, address, d.defaultDialer)
+	}
+}
+
+var _ HostnameWanter = new(BoundDialer)
 
 func ipToLAddr(network string, ip net.IP) (net.Addr, string, error) {
 	v6 := true
