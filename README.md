@@ -207,8 +207,6 @@ Usage of /home/user/go/bin/dumbproxy:
     	enable TLS and use certificate
   -ciphers string
     	colon-separated list of enabled ciphers
-  -conn-time-limit duration
-    	hard time limit for connections (default 6h0m0s)
   -disable-http2
     	disable HTTP2
   -hmac-genkey
