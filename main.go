@@ -157,6 +157,7 @@ type CLIArgs struct {
 	bwBuckets         uint
 	bwSeparate        bool
 	connTimeLimit     time.Duration
+	reqHeaderTimeout  time.Duration
 }
 
 func parse_args() CLIArgs {
@@ -199,6 +200,7 @@ func parse_args() CLIArgs {
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
 	flag.DurationVar(&args.connTimeLimit, "conn-time-limit", 6*time.Hour, "hard time limit for connections")
+	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -296,7 +298,7 @@ func run() int {
 		}),
 		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 		ReadTimeout:       0,
-		ReadHeaderTimeout: 0,
+		ReadHeaderTimeout: args.reqHeaderTimeout,
 		WriteTimeout:      0,
 		IdleTimeout:       0,
 		ConnContext:       srvConnContext,
