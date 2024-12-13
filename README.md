@@ -13,7 +13,7 @@ Dumbest HTTP proxy ever.
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
   * Via auto-reloaded NCSA httpd-style passwords file
-  * Via tatic login and password
+  * Via static login and password
   * Via HMAC signatures provisioned by central authority (e.g. some webservice)
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
   * Supports client authentication with client TLS certificates
