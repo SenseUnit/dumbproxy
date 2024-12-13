@@ -12,10 +12,14 @@ Dumbest HTTP proxy ever.
 * Zero-configuration
 * Supports CONNECT method and forwarding of HTTPS connections
 * Supports `Basic` proxy authentication
+  * Via auto-reloaded NCSA httpd-style passwords file
+  * Via tatic login and password
+  * Via HMAC signatures provisioned by central authority (e.g. some webservice)
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
-* Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
-* Supports client authentication with client TLS certificates
-* Supports HTTP/2
+  * Supports client authentication with client TLS certificates
+  * Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
+* Per-user bandwidth limits
+* HTTP/2 support
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 * systemd socket activation
