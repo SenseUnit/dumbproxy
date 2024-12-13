@@ -191,6 +191,12 @@ Usage of /home/user/go/bin/dumbproxy:
     	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
+  -bw-limit uint
+    	per-user bandwidth limit in bytes per second
+  -bw-limit-buckets uint
+    	number of buckets of bandwidth limit (default 1048576)
+  -bw-limit-separate
+    	separate upload and download bandwidth limits
   -cafile string
     	CA file to authenticate clients with certificates
   -cert string
