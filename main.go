@@ -155,6 +155,9 @@ type CLIArgs struct {
 	bwLimit           uint64
 	bwBuckets         uint
 	bwSeparate        bool
+	dnsCacheTTL       time.Duration
+	dnsCacheNegTTL    time.Duration
+	dnsCacheTimeout   time.Duration
 	reqHeaderTimeout  time.Duration
 }
 
@@ -197,6 +200,9 @@ func parse_args() CLIArgs {
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
+	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
+	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
+	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
@@ -272,6 +278,21 @@ func run() int {
 			d = newDialer
 		}
 		d = dialer.AlwaysRequireHostname(d)
+	}
+
+	if args.dnsCacheTTL > 0 {
+		cd := dialer.NewNameResolveCachingDialer(
+			d,
+			net.DefaultResolver,
+			args.dnsCacheTTL,
+			args.dnsCacheNegTTL,
+			args.dnsCacheTimeout,
+		)
+		cd.Start()
+		defer cd.Stop()
+		d = cd
+	} else {
+		// TODO: non-caching resolver
 	}
 
 	// handler requisites
