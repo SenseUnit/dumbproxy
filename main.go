@@ -26,6 +26,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/SenseUnit/dumbproxy/access"
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
 	"github.com/SenseUnit/dumbproxy/forward"
@@ -266,6 +267,9 @@ func run() int {
 	}
 	defer auth.Stop()
 
+	// setup access filters
+	var filterRoot access.Filter = access.AlwaysAllow{}
+
 	// construct dialers
 	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	if len(args.proxy) > 0 {
@@ -279,6 +283,8 @@ func run() int {
 		}
 		d = dialer.AlwaysRequireHostname(d)
 	}
+
+	d = dialer.NewFilterDialer(filterRoot.Access, d) // must be in chain after resolving
 
 	if args.dnsCacheTTL > 0 {
 		cd := dialer.NewNameResolveCachingDialer(

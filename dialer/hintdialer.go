@@ -16,11 +16,15 @@ var (
 	ErrUnknownNetwork     = errors.New("unknown network")
 )
 
-type BoundDialerContextKey struct{}
+type boundDialerContextKey struct{}
 
-type BoundDialerContextValue struct {
+type boundDialerContextValue struct {
 	Hints     *string
 	LocalAddr string
+}
+
+func BoundDialerParamsToContext(ctx context.Context, hints *string, localAddr string) context.Context {
+	return context.WithValue(ctx, boundDialerContextKey{}, boundDialerContextValue{hints, localAddr})
 }
 
 type BoundDialer struct {
@@ -41,13 +45,11 @@ func NewBoundDialer(defaultDialer Dialer, defaultHints string) *BoundDialer {
 func (d *BoundDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	hints := d.defaultHints
 	lAddr := ""
-	if hintsOverride := ctx.Value(BoundDialerContextKey{}); hintsOverride != nil {
-		if hintsOverrideValue, ok := hintsOverride.(BoundDialerContextValue); ok {
-			if hintsOverrideValue.Hints != nil {
-				hints = *hintsOverrideValue.Hints
-			}
-			lAddr = hintsOverrideValue.LocalAddr
+	if hintsOverrideValue, ok := ctx.Value(boundDialerContextKey{}).(boundDialerContextValue); ok {
+		if hintsOverrideValue.Hints != nil {
+			hints = *hintsOverrideValue.Hints
 		}
+		lAddr = hintsOverrideValue.LocalAddr
 	}
 
 	parsedHints, err := parseHints(hints, lAddr)

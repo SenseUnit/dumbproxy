@@ -175,11 +175,10 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 			ipHints = &hintValues[0]
 		}
 	}
-	newCtx := context.WithValue(req.Context(), dialer.BoundDialerContextKey{}, dialer.BoundDialerContextValue{
-		Hints:     ipHints,
-		LocalAddr: trimAddrPort(localAddr),
-	})
-	req = req.WithContext(newCtx)
+	ctx := req.Context()
+	ctx = dialer.BoundDialerParamsToContext(ctx, ipHints, trimAddrPort(localAddr))
+	ctx = dialer.FilterParamsToContext(ctx, req, username)
+	req = req.WithContext(ctx)
 	delHopHeaders(req.Header)
 	if isConnect {
 		s.HandleTunnel(wr, req, username)

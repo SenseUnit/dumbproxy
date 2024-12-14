@@ -24,7 +24,7 @@ func (e ErrAccessDenied) Unwrap() error {
 type filterContextKey struct{}
 
 type filterContextParams struct {
-	req *http.Request
+	req      *http.Request
 	username string
 }
 
