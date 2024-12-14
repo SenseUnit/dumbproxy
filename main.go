@@ -292,7 +292,7 @@ func run() int {
 		defer cd.Stop()
 		d = cd
 	} else {
-		// TODO: non-caching resolver
+		d = dialer.NewNameResolvingDialer(d, net.DefaultResolver)
 	}
 
 	// handler requisites

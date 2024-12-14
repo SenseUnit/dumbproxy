@@ -22,10 +22,6 @@ type resolverCacheValue struct {
 	err   error
 }
 
-type Resolver interface {
-	LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error)
-}
-
 type NameResolveCachingDialer struct {
 	cache     *ttlcache.Cache[resolverCacheKey, resolverCacheValue]
 	next      Dialer
