@@ -271,24 +271,24 @@ func run() int {
 	var filterRoot access.Filter = access.AlwaysAllow{}
 
 	// construct dialers
-	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
+	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	if len(args.proxy) > 0 {
 		for _, proxyURL := range args.proxy {
-			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
+			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, dialerRoot)
 			if err != nil {
 				mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
 				return 3
 			}
-			d = newDialer
+			dialerRoot = newDialer
 		}
-		d = dialer.AlwaysRequireHostname(d)
+		dialerRoot = dialer.AlwaysRequireHostname(dialerRoot)
 	}
 
-	d = dialer.NewFilterDialer(filterRoot.Access, d) // must be in chain after resolving
+	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
 
 	if args.dnsCacheTTL > 0 {
 		cd := dialer.NewNameResolveCachingDialer(
-			d,
+			dialerRoot,
 			net.DefaultResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,
@@ -296,9 +296,9 @@ func run() int {
 		)
 		cd.Start()
 		defer cd.Stop()
-		d = cd
+		dialerRoot = cd
 	} else {
-		d = dialer.NewNameResolvingDialer(d, net.DefaultResolver)
+		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, net.DefaultResolver)
 	}
 
 	// handler requisites
@@ -314,7 +314,7 @@ func run() int {
 	server := http.Server{
 		Addr: args.bind_address,
 		Handler: handler.NewProxyHandler(&handler.Config{
-			Dialer:      d,
+			Dialer:      dialerRoot,
 			Auth:        auth,
 			Logger:      proxyLogger,
 			UserIPHints: args.userIPHints,
