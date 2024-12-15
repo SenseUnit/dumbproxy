@@ -67,6 +67,16 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 		return nrcd.next.DialContext(ctx, network, address)
 	}
 
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract host and port from %s: %w", address, err)
+	}
+
+	if addr, err := netip.ParseAddr(host); err == nil {
+		// literal IP address, just do unmapping
+		return nrcd.next.DialContext(ctx, network, net.JoinHostPort(addr.Unmap().String(), port))
+	}
+
 	var resolveNetwork string
 	switch network {
 	case "udp4", "tcp4", "ip4":
@@ -79,10 +89,6 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 		return nil, fmt.Errorf("resolving dial %q: unsupported network %q", address, network)
 	}
 
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract host and port from %s: %w", address, err)
-	}
 	host = strings.ToLower(host)
 
 	resItem := nrcd.cache.Get(resolverCacheKey{
