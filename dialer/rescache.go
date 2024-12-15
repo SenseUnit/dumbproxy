@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -82,6 +83,7 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract host and port from %s: %w", address, err)
 	}
+	host = strings.ToLower(host)
 
 	resItem := nrcd.cache.Get(resolverCacheKey{
 		network: resolveNetwork,
