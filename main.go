@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +67,45 @@ func (a *CSVArg) String() string {
 		return "<empty>"
 	}
 	return strings.Join(*a, ",")
+}
+
+func (a *CSVArg) Value() []string {
+	return []string(*a)
+}
+
+type PrefixList []netip.Prefix
+
+func (l *PrefixList) Set(s string) error {
+	var pfxList []netip.Prefix
+	parts := strings.Split(s, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		pfx, err := netip.ParsePrefix(part)
+		if err != nil {
+			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, err)
+		}
+		pfxList = append(pfxList, pfx)
+	}
+	*l = PrefixList(pfxList)
+	return nil
+}
+
+func (l *PrefixList) String() string {
+	if l == nil || *l == nil {
+		return ""
+	}
+	parts := make([]string, 0, len([]netip.Prefix(*l)))
+	for _, part := range []netip.Prefix(*l) {
+		parts = append(parts, part.String())
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (l *PrefixList) Value() []netip.Prefix {
+	return []netip.Prefix(*l)
 }
 
 type TLSVersionArg uint16
@@ -160,12 +200,24 @@ type CLIArgs struct {
 	dnsCacheNegTTL    time.Duration
 	dnsCacheTimeout   time.Duration
 	reqHeaderTimeout  time.Duration
+	denyDstAddr       PrefixList
 }
 
 func parse_args() CLIArgs {
 	args := CLIArgs{
 		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
 		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
+		denyDstAddr: PrefixList{
+			netip.MustParsePrefix("127.0.0.0/8"),
+			netip.MustParsePrefix("0.0.0.0/32"),
+			netip.MustParsePrefix("10.0.0.0/8"),
+			netip.MustParsePrefix("172.16.0.0/12"),
+			netip.MustParsePrefix("192.168.0.0/16"),
+			netip.MustParsePrefix("169.254.0.0/16"),
+			netip.MustParsePrefix("::1/128"),
+			netip.MustParsePrefix("::/128"),
+			netip.MustParsePrefix("fe80::/10"),
+		},
 	}
 	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
@@ -205,6 +257,7 @@ func parse_args() CLIArgs {
 	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
+	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -269,6 +322,9 @@ func run() int {
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
+	if len(args.denyDstAddr.Value()) > 0 {
+		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
+	}
 
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
@@ -375,8 +431,8 @@ func run() int {
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
 			Email:  args.autocertEmail,
 		}
-		if args.autocertWhitelist != nil {
-			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
+		if args.autocertWhitelist.Value() != nil {
+			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.Value()...)
 		}
 		if args.autocertHTTP != "" {
 			go func() {

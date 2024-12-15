@@ -2,7 +2,7 @@ package access
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 )
@@ -12,7 +12,15 @@ type DstAddrFilter struct {
 	next    Filter
 }
 
-var ErrDestinationAddressNotAllowed = errors.New("destination address not allowed")
+type ErrDestinationAddressNotAllowed struct {
+	a netip.Addr
+	p netip.Prefix
+}
+
+func (e ErrDestinationAddressNotAllowed) Error() string {
+	return fmt.Sprintf("destionation address %s not allowed by filter prefix %s",
+		e.a.String(), e.p.String())
+}
 
 func NewDstAddrFilter(prefixes []netip.Prefix, next Filter) DstAddrFilter {
 	return DstAddrFilter{
@@ -29,7 +37,7 @@ func (f DstAddrFilter) Access(ctx context.Context, req *http.Request, username, 
 	}
 	for _, pfx := range f.pfxList {
 		if pfx.Contains(addrport.Addr()) {
-			return ErrDestinationAddressNotAllowed
+			return ErrDestinationAddressNotAllowed{addrport.Addr(), pfx}
 		}
 	}
 	if f.next != nil {
