@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh/terminal"
 
+	"github.com/SenseUnit/dumbproxy/access"
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
 	"github.com/SenseUnit/dumbproxy/forward"
@@ -65,6 +67,45 @@ func (a *CSVArg) String() string {
 		return "<empty>"
 	}
 	return strings.Join(*a, ",")
+}
+
+func (a *CSVArg) Value() []string {
+	return []string(*a)
+}
+
+type PrefixList []netip.Prefix
+
+func (l *PrefixList) Set(s string) error {
+	var pfxList []netip.Prefix
+	parts := strings.Split(s, ",")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		pfx, err := netip.ParsePrefix(part)
+		if err != nil {
+			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, err)
+		}
+		pfxList = append(pfxList, pfx)
+	}
+	*l = PrefixList(pfxList)
+	return nil
+}
+
+func (l *PrefixList) String() string {
+	if l == nil || *l == nil {
+		return ""
+	}
+	parts := make([]string, 0, len([]netip.Prefix(*l)))
+	for _, part := range []netip.Prefix(*l) {
+		parts = append(parts, part.String())
+	}
+	return strings.Join(parts, ", ")
+}
+
+func (l *PrefixList) Value() []netip.Prefix {
+	return []netip.Prefix(*l)
 }
 
 type TLSVersionArg uint16
@@ -155,13 +196,28 @@ type CLIArgs struct {
 	bwLimit           uint64
 	bwBuckets         uint
 	bwSeparate        bool
+	dnsCacheTTL       time.Duration
+	dnsCacheNegTTL    time.Duration
+	dnsCacheTimeout   time.Duration
 	reqHeaderTimeout  time.Duration
+	denyDstAddr       PrefixList
 }
 
 func parse_args() CLIArgs {
 	args := CLIArgs{
 		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
 		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
+		denyDstAddr: PrefixList{
+			netip.MustParsePrefix("127.0.0.0/8"),
+			netip.MustParsePrefix("0.0.0.0/32"),
+			netip.MustParsePrefix("10.0.0.0/8"),
+			netip.MustParsePrefix("172.16.0.0/12"),
+			netip.MustParsePrefix("192.168.0.0/16"),
+			netip.MustParsePrefix("169.254.0.0/16"),
+			netip.MustParsePrefix("::1/128"),
+			netip.MustParsePrefix("::/128"),
+			netip.MustParsePrefix("fe80::/10"),
+		},
 	}
 	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
@@ -197,7 +253,11 @@ func parse_args() CLIArgs {
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
+	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
+	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
+	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
+	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -206,6 +266,7 @@ func parse_args() CLIArgs {
 func run() int {
 	args := parse_args()
 
+	// handle special invocation modes
 	if args.showVersion {
 		fmt.Println(version)
 		return 0
@@ -237,6 +298,12 @@ func run() int {
 		return 0
 	}
 
+	// we don't expect positional arguments in the main operation mode
+	if len(args.positionalArgs) > 0 {
+		arg_fail("Unexpected positional arguments! Check your command line.")
+	}
+
+	// setup logging
 	logWriter := clog.NewLogWriter(os.Stderr)
 	defer logWriter.Close()
 
@@ -250,6 +317,7 @@ func run() int {
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
 
+	// setup auth provider
 	auth, err := auth.NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
@@ -257,16 +325,44 @@ func run() int {
 	}
 	defer auth.Stop()
 
-	var d dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
-	for _, proxyURL := range args.proxy {
-		newDialer, err := dialer.ProxyDialerFromURL(proxyURL, d)
-		if err != nil {
-			mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
-			return 3
-		}
-		d = newDialer
+	// setup access filters
+	var filterRoot access.Filter = access.AlwaysAllow{}
+	if len(args.denyDstAddr.Value()) > 0 {
+		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
 
+	// construct dialers
+	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
+	if len(args.proxy) > 0 {
+		for _, proxyURL := range args.proxy {
+			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, dialerRoot)
+			if err != nil {
+				mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
+				return 3
+			}
+			dialerRoot = newDialer
+		}
+		dialerRoot = dialer.AlwaysRequireHostname(dialerRoot)
+	}
+
+	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
+
+	if args.dnsCacheTTL > 0 {
+		cd := dialer.NewNameResolveCachingDialer(
+			dialerRoot,
+			net.DefaultResolver,
+			args.dnsCacheTTL,
+			args.dnsCacheNegTTL,
+			args.dnsCacheTimeout,
+		)
+		cd.Start()
+		defer cd.Stop()
+		dialerRoot = cd
+	} else {
+		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, net.DefaultResolver)
+	}
+
+	// handler requisites
 	forwarder := forward.PairConnections
 	if args.bwLimit != 0 {
 		forwarder = forward.NewBWLimit(
@@ -279,7 +375,7 @@ func run() int {
 	server := http.Server{
 		Addr: args.bind_address,
 		Handler: handler.NewProxyHandler(&handler.Config{
-			Dialer:      dialer.MaybeWrapWithContextDialer(d),
+			Dialer:      dialerRoot,
 			Auth:        auth,
 			Logger:      proxyLogger,
 			UserIPHints: args.userIPHints,
@@ -292,6 +388,7 @@ func run() int {
 		IdleTimeout:       0,
 	}
 
+	// listener setup
 	if args.disableHTTP2 {
 		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
 	}
@@ -339,8 +436,8 @@ func run() int {
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
 			Email:  args.autocertEmail,
 		}
-		if args.autocertWhitelist != nil {
-			m.HostPolicy = autocert.HostWhitelist([]string(args.autocertWhitelist)...)
+		if args.autocertWhitelist.Value() != nil {
+			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.Value()...)
 		}
 		if args.autocertHTTP != "" {
 			go func() {
@@ -358,6 +455,8 @@ func run() int {
 		listener = tls.NewListener(listener, cfg)
 	}
 	mainLogger.Info("Proxy server started.")
+
+	// setup done
 	err = server.Serve(listener)
 	mainLogger.Critical("Server terminated with a reason: %v", err)
 	mainLogger.Info("Shutting down...")

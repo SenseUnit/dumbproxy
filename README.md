@@ -20,6 +20,7 @@ Dumbest HTTP proxy ever.
   * Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
 * Per-user bandwidth limits
 * HTTP/2 support
+* Optional DNS cache
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 * systemd socket activation
@@ -207,8 +208,16 @@ Usage of /home/user/go/bin/dumbproxy:
     	enable TLS and use certificate
   -ciphers string
     	colon-separated list of enabled ciphers
+  -deny-dst-addr value
+    	comma-separated list of CIDR prefixes of forbidden IP addresses (default 127.0.0.0/8, 0.0.0.0/32, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, ::/128, fe80::/10)
   -disable-http2
     	disable HTTP2
+  -dns-cache-neg-ttl duration
+    	TTL for negative responses of DNS cache (default 1s)
+  -dns-cache-timeout duration
+    	timeout for shared resolves of DNS cache (default 5s)
+  -dns-cache-ttl duration
+    	enable DNS cache with specified fixed TTL
   -hmac-genkey
     	generate hex-encoded HMAC signing key of optimal length
   -hmac-sign

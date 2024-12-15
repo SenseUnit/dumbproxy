@@ -11,8 +11,14 @@ import (
 	xproxy "golang.org/x/net/proxy"
 )
 
-type Dialer = xproxy.Dialer
-type ContextDialer = xproxy.ContextDialer
+type LegacyDialer interface {
+	Dial(network, address string) (net.Conn, error)
+}
+
+type Dialer interface {
+	LegacyDialer
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
 
 var registerDialerTypesOnce sync.Once
 
@@ -29,11 +35,11 @@ func ProxyDialerFromURL(proxyURL string, forward Dialer) (Dialer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct proxy dialer from URL %q: %w", proxyURL, err)
 	}
-	return d, nil
+	return MaybeWrapWithContextDialer(d), nil
 }
 
 type wrappedDialer struct {
-	d Dialer
+	d LegacyDialer
 }
 
 func (wd wrappedDialer) Dial(net, address string) (net.Conn, error) {
@@ -61,8 +67,10 @@ func (wd wrappedDialer) DialContext(ctx context.Context, network, address string
 	return conn, err
 }
 
-func MaybeWrapWithContextDialer(d Dialer) ContextDialer {
-	if xd, ok := d.(ContextDialer); ok {
+var _ HostnameWanter = new(BoundDialer)
+
+func MaybeWrapWithContextDialer(d LegacyDialer) Dialer {
+	if xd, ok := d.(Dialer); ok {
 		return xd
 	}
 	return wrappedDialer{d}

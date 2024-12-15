@@ -16,23 +16,23 @@ var (
 	ErrUnknownNetwork     = errors.New("unknown network")
 )
 
-type BoundDialerContextKey struct{}
+type boundDialerContextKey struct{}
 
-type BoundDialerContextValue struct {
+type boundDialerContextValue struct {
 	Hints     *string
 	LocalAddr string
 }
 
-type BoundDialerDefaultSink interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+func BoundDialerParamsToContext(ctx context.Context, hints *string, localAddr string) context.Context {
+	return context.WithValue(ctx, boundDialerContextKey{}, boundDialerContextValue{hints, localAddr})
 }
 
 type BoundDialer struct {
-	defaultDialer BoundDialerDefaultSink
+	defaultDialer Dialer
 	defaultHints  string
 }
 
-func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints string) *BoundDialer {
+func NewBoundDialer(defaultDialer Dialer, defaultHints string) *BoundDialer {
 	if defaultDialer == nil {
 		defaultDialer = &net.Dialer{}
 	}
@@ -45,13 +45,11 @@ func NewBoundDialer(defaultDialer BoundDialerDefaultSink, defaultHints string) *
 func (d *BoundDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	hints := d.defaultHints
 	lAddr := ""
-	if hintsOverride := ctx.Value(BoundDialerContextKey{}); hintsOverride != nil {
-		if hintsOverrideValue, ok := hintsOverride.(BoundDialerContextValue); ok {
-			if hintsOverrideValue.Hints != nil {
-				hints = *hintsOverrideValue.Hints
-			}
-			lAddr = hintsOverrideValue.LocalAddr
+	if hintsOverrideValue, ok := ctx.Value(boundDialerContextKey{}).(boundDialerContextValue); ok {
+		if hintsOverrideValue.Hints != nil {
+			hints = *hintsOverrideValue.Hints
 		}
+		lAddr = hintsOverrideValue.LocalAddr
 	}
 
 	parsedHints, err := parseHints(hints, lAddr)
@@ -105,6 +103,17 @@ func (d *BoundDialer) DialContext(ctx context.Context, network, address string) 
 func (d *BoundDialer) Dial(network, address string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, address)
 }
+
+func (d *BoundDialer) WantsHostname(ctx context.Context, net, address string) bool {
+	switch net {
+	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6", "ip", "ip4", "ip6":
+		return false
+	default:
+		return WantsHostname(ctx, net, address, d.defaultDialer)
+	}
+}
+
+var _ HostnameWanter = new(BoundDialer)
 
 func ipToLAddr(network string, ip net.IP) (net.Addr, string, error) {
 	v6 := true
