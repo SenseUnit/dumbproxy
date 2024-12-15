@@ -35,9 +35,10 @@ func (f DstAddrFilter) Access(ctx context.Context, req *http.Request, username, 
 		// not an IP address, no action needed
 		return nil
 	}
+	addr := addrport.Addr().Unmap()
 	for _, pfx := range f.pfxList {
-		if pfx.Contains(addrport.Addr()) {
-			return ErrDestinationAddressNotAllowed{addrport.Addr(), pfx}
+		if pfx.Contains(addr) {
+			return ErrDestinationAddressNotAllowed{addr, pfx}
 		}
 	}
 	if f.next != nil {
