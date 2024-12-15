@@ -298,6 +298,11 @@ func run() int {
 		return 0
 	}
 
+	// we don't expect positional arguments in the main operation mode
+	if len(args.positionalArgs) > 0 {
+		arg_fail("Unexpected positional arguments! Check your command line.")
+	}
+
 	// setup logging
 	logWriter := clog.NewLogWriter(os.Stderr)
 	defer logWriter.Close()
