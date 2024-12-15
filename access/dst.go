@@ -18,7 +18,7 @@ type ErrDestinationAddressNotAllowed struct {
 }
 
 func (e ErrDestinationAddressNotAllowed) Error() string {
-	return fmt.Sprintf("destionation address %s not allowed by filter prefix %s",
+	return fmt.Sprintf("destination address %s is not allowed by filter prefix %s",
 		e.a.String(), e.p.String())
 }
 
