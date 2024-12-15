@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -68,6 +69,12 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
 	conn, err := s.dialer.DialContext(req.Context(), "tcp", req.RequestURI)
 	if err != nil {
+		var accessErr dialer.ErrAccessDenied
+		if errors.As(err, &accessErr) {
+			s.logger.Warning("Access denied: %v", err)
+			http.Error(wr, "Access denied", http.StatusForbidden)
+			return
+		}
 		s.logger.Error("Can't satisfy CONNECT request: %v", err)
 		http.Error(wr, "Can't satisfy CONNECT request", http.StatusBadGateway)
 		return
@@ -124,6 +131,12 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	}
 	resp, err := s.httptransport.RoundTrip(req)
 	if err != nil {
+		var accessErr dialer.ErrAccessDenied
+		if errors.As(err, &accessErr) {
+			s.logger.Warning("Access denied: %v", err)
+			http.Error(wr, "Access denied", http.StatusForbidden)
+			return
+		}
 		s.logger.Error("HTTP fetch error: %v", err)
 		http.Error(wr, "Server Error", http.StatusInternalServerError)
 		return
