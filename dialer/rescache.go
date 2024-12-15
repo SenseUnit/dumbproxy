@@ -39,6 +39,9 @@ func NewNameResolveCachingDialer(next Dialer, resolver Resolver, posTTL, negTTL,
 						ctx, cl := context.WithTimeout(context.Background(), timeout)
 						defer cl()
 						res, err := resolver.LookupNetIP(ctx, key.network, key.host)
+						for i := range res {
+							res[i] = res[i].Unmap()
+						}
 						setTTL := negTTL
 						if err == nil {
 							setTTL = posTTL

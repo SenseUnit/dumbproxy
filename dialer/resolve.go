@@ -51,6 +51,9 @@ func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address
 	if err != nil {
 		return nil, fmt.Errorf("resolving %q (%s) failed: %w", host, network, err)
 	}
+	for i := range res {
+		res[i] = res[i].Unmap()
+	}
 
 	var dialErr error
 	var conn net.Conn
