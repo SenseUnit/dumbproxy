@@ -10,6 +10,8 @@ import (
 	"os"
 
 	"github.com/dop251/goja"
+
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 var ErrJSDenied = errors.New("denied by JS filter")
@@ -62,14 +64,24 @@ type JSFilter struct {
 	next Filter
 }
 
-func NewJSFilter(filename string, next Filter) (*JSFilter, error) {
+func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilter, error) {
 	script, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load JS script file %q: %w", filename, err)
 	}
 	vm := goja.New()
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-
+	err = vm.Set("print", func(call goja.FunctionCall) goja.Value {
+		printArgs := make([]interface{}, len(call.Arguments))
+		for i, arg := range call.Arguments {
+			printArgs[i] = arg
+		}
+		logger.Info("%s", fmt.Sprintln(printArgs...))
+		return goja.Undefined()
+	})
+	if err != nil {
+		return nil, errors.New("can't add print function to runtime")
+	}
 	_, err = vm.RunString(string(script))
 	if err != nil {
 		return nil, fmt.Errorf("script run failed: %w", err)
@@ -91,9 +103,9 @@ func NewJSFilter(filename string, next Filter) (*JSFilter, error) {
 	}
 
 	return &JSFilter{
-		vm:   vm,
-		f:    f,
-		next: next,
+		vm:     vm,
+		f:      f,
+		next:   next,
 	}, nil
 }
 

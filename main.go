@@ -321,6 +321,9 @@ func run() int {
 	authLogger := clog.NewCondLogger(log.New(logWriter, "AUTH    : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	jsAccessLogger := clog.NewCondLogger(log.New(logWriter, "JSACCESS: ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
 	// setup auth provider
 	auth, err := auth.NewAuth(args.auth, authLogger)
@@ -336,7 +339,7 @@ func run() int {
 		fp, err := access.NewFilterPool(
 			args.jsAccessFilterInstances,
 			func() (access.Filter, error) {
-				return access.NewJSFilter(args.jsAccessFilter, filterRoot)
+				return access.NewJSFilter(args.jsAccessFilter, jsAccessLogger, filterRoot)
 			},
 		)
 		if err != nil {
