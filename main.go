@@ -18,6 +18,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -169,38 +170,40 @@ func (a *TLSVersionArg) String() string {
 }
 
 type CLIArgs struct {
-	bind_address      string
-	auth              string
-	verbosity         int
-	cert, key, cafile string
-	list_ciphers      bool
-	ciphers           string
-	disableHTTP2      bool
-	showVersion       bool
-	autocert          bool
-	autocertWhitelist CSVArg
-	autocertDir       string
-	autocertACME      string
-	autocertEmail     string
-	autocertHTTP      string
-	passwd            string
-	passwdCost        int
-	hmacSign          bool
-	hmacGenKey        bool
-	positionalArgs    []string
-	proxy             []string
-	sourceIPHints     string
-	userIPHints       bool
-	minTLSVersion     TLSVersionArg
-	maxTLSVersion     TLSVersionArg
-	bwLimit           uint64
-	bwBuckets         uint
-	bwSeparate        bool
-	dnsCacheTTL       time.Duration
-	dnsCacheNegTTL    time.Duration
-	dnsCacheTimeout   time.Duration
-	reqHeaderTimeout  time.Duration
-	denyDstAddr       PrefixList
+	bind_address            string
+	auth                    string
+	verbosity               int
+	cert, key, cafile       string
+	list_ciphers            bool
+	ciphers                 string
+	disableHTTP2            bool
+	showVersion             bool
+	autocert                bool
+	autocertWhitelist       CSVArg
+	autocertDir             string
+	autocertACME            string
+	autocertEmail           string
+	autocertHTTP            string
+	passwd                  string
+	passwdCost              int
+	hmacSign                bool
+	hmacGenKey              bool
+	positionalArgs          []string
+	proxy                   []string
+	sourceIPHints           string
+	userIPHints             bool
+	minTLSVersion           TLSVersionArg
+	maxTLSVersion           TLSVersionArg
+	bwLimit                 uint64
+	bwBuckets               uint
+	bwSeparate              bool
+	dnsCacheTTL             time.Duration
+	dnsCacheNegTTL          time.Duration
+	dnsCacheTimeout         time.Duration
+	reqHeaderTimeout        time.Duration
+	denyDstAddr             PrefixList
+	jsAccessFilter          string
+	jsAccessFilterInstances int
 }
 
 func parse_args() CLIArgs {
@@ -258,6 +261,8 @@ func parse_args() CLIArgs {
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
 	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
+	flag.StringVar(&args.jsAccessFilter, "js-access-filter", "", "path to JS script file with the \"access\" filter function")
+	flag.IntVar(&args.jsAccessFilterInstances, "js-access-filter-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle access filter requests")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -327,6 +332,19 @@ func run() int {
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
+	if args.jsAccessFilter != "" {
+		fp, err := access.NewFilterPool(
+			args.jsAccessFilterInstances,
+			func() (access.Filter, error) {
+				return access.NewJSFilter(args.jsAccessFilter, filterRoot)
+			},
+		)
+		if err != nil {
+			mainLogger.Critical("Failed to run JS filter: %v", err)
+			return 3
+		}
+		filterRoot = fp
+	}
 	if len(args.denyDstAddr.Value()) > 0 {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
