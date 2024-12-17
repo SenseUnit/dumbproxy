@@ -31,11 +31,11 @@ func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilt
 		return nil, fmt.Errorf("unable to load JS script file %q: %w", filename, err)
 	}
 	vm := goja.New()
-	jsext.AddPrinter(vm, logger)
-	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+	err = jsext.AddPrinter(vm, logger)
 	if err != nil {
 		return nil, errors.New("can't add print function to runtime")
 	}
+	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 	_, err = vm.RunString(string(script))
 	if err != nil {
 		return nil, fmt.Errorf("script run failed: %w", err)
