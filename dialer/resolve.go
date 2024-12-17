@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -23,17 +24,6 @@ func NewNameResolvingDialer(next Dialer, resolver Resolver) NameResolvingDialer 
 		next:     next,
 		resolver: resolver,
 	}
-}
-
-type origDstKey struct{}
-
-func OrigDstFromContext(ctx context.Context) (string, bool) {
-	orig, ok := ctx.Value(origDstKey{}).(string)
-	return orig, ok
-}
-
-func OrigDstToContext(ctx context.Context, dst string) context.Context {
-	return context.WithValue(ctx, origDstKey{}, dst)
 }
 
 func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
@@ -71,7 +61,7 @@ func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address
 		res[i] = res[i].Unmap()
 	}
 
-	ctx = OrigDstToContext(ctx, address)
+	ctx = dto.OrigDstToContext(ctx, address)
 
 	var dialErr error
 	var conn net.Conn

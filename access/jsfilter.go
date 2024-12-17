@@ -4,57 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"mime/multipart"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/dop251/goja"
 
+	"github.com/SenseUnit/dumbproxy/jsext"
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 var ErrJSDenied = errors.New("denied by JS filter")
 
-type JSRequestInfo struct {
-	Method           string          `json:"method"`
-	URL              string          `json:"url"`
-	Proto            string          `json:"proto"`
-	ProtoMajor       int             `json:"protoMajor"`
-	ProtoMinor       int             `json:"protoMinor"`
-	Header           http.Header     `json:"header"`
-	ContentLength    int64           `json:"contentLength"`
-	TransferEncoding []string        `json:"transferEncoding"`
-	Host             string          `json:"host"`
-	Form             url.Values      `json:"form"`
-	PostForm         url.Values      `json:"portForm"`
-	MultipartForm    *multipart.Form `json:"multipartForm"`
-	Trailer          http.Header     `json:"trailer"`
-	RemoteAddr       string          `json:"remoteAddr"`
-	RequestURI       string          `json:"requestURI"`
-}
-
-func JSRequestInfoFromRequest(req *http.Request) *JSRequestInfo {
-	return &JSRequestInfo{
-		Method:           req.Method,
-		URL:              req.URL.String(),
-		Proto:            req.Proto,
-		ProtoMajor:       req.ProtoMajor,
-		ProtoMinor:       req.ProtoMinor,
-		Header:           req.Header,
-		ContentLength:    req.ContentLength,
-		TransferEncoding: req.TransferEncoding,
-		Host:             req.Host,
-		Form:             req.Form,
-		PostForm:         req.PostForm,
-		MultipartForm:    req.MultipartForm,
-		Trailer:          req.Trailer,
-		RemoteAddr:       req.RemoteAddr,
-		RequestURI:       req.RequestURI,
-	}
-}
-
-type JSFilterFunc = func(req *JSRequestInfo, username, network, address string) (bool, error)
+type JSFilterFunc = func(req *jsext.JSRequestInfo, username, network, address string) (bool, error)
 
 // JSFilter is not suitable for concurrent use!
 // Wrap it with filter pool for that!
@@ -70,15 +31,8 @@ func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilt
 		return nil, fmt.Errorf("unable to load JS script file %q: %w", filename, err)
 	}
 	vm := goja.New()
+	jsext.AddPrinter(vm, logger)
 	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-	err = vm.Set("print", func(call goja.FunctionCall) goja.Value {
-		printArgs := make([]interface{}, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			printArgs[i] = arg
-		}
-		logger.Info("%s", fmt.Sprintln(printArgs...))
-		return goja.Undefined()
-	})
 	if err != nil {
 		return nil, errors.New("can't add print function to runtime")
 	}
@@ -110,7 +64,7 @@ func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilt
 }
 
 func (j *JSFilter) Access(ctx context.Context, req *http.Request, username, network, address string) error {
-	ri := JSRequestInfoFromRequest(req)
+	ri := jsext.JSRequestInfoFromRequest(req)
 	res, err := j.f(ri, username, network, address)
 	if err != nil {
 		return fmt.Errorf("JS access script exception: %w", err)
