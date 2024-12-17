@@ -381,13 +381,15 @@ func run() int {
 				newDialer, err := dialer.NewJSRouter(
 					proxy.value,
 					args.jsProxyRouterInstances,
-					func(url string) (dialer.Dialer, error) {
-						d, err := dialer.ProxyDialerFromURL(url, dialerRoot)
-						if err != nil {
-							return nil, err
+					func(root dialer.Dialer) func(url string) (dialer.Dialer, error) {
+						return func(url string) (dialer.Dialer, error) {
+							d, err := dialer.ProxyDialerFromURL(url, root)
+							if err != nil {
+								return nil, err
+							}
+							return dialer.AlwaysRequireHostname(d), nil
 						}
-						return dialer.AlwaysRequireHostname(d), nil
-					},
+					}(dialerRoot),
 					jsRouterLogger,
 					dialerRoot,
 				)
