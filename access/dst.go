@@ -33,7 +33,7 @@ func (f DstAddrFilter) Access(ctx context.Context, req *http.Request, username, 
 	addrport, err := netip.ParseAddrPort(address)
 	if err != nil {
 		// not an IP address, no action needed
-		return nil
+		return f.next.Access(ctx, req, username, network, address)
 	}
 	addr := addrport.Addr().Unmap()
 	for _, pfx := range f.pfxList {
@@ -41,8 +41,5 @@ func (f DstAddrFilter) Access(ctx context.Context, req *http.Request, username, 
 			return ErrDestinationAddressNotAllowed{addr, pfx}
 		}
 	}
-	if f.next != nil {
-		return f.next.Access(ctx, req, username, network, address)
-	}
-	return nil
+	return f.next.Access(ctx, req, username, network, address)
 }

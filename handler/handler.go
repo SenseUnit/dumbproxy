@@ -13,6 +13,8 @@ import (
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
+	ddto "github.com/SenseUnit/dumbproxy/dialer/dto"
+	derrors "github.com/SenseUnit/dumbproxy/dialer/errors"
 	"github.com/SenseUnit/dumbproxy/forward"
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
@@ -69,7 +71,7 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
 	conn, err := s.dialer.DialContext(req.Context(), "tcp", req.RequestURI)
 	if err != nil {
-		var accessErr dialer.ErrAccessDenied
+		var accessErr derrors.ErrAccessDenied
 		if errors.As(err, &accessErr) {
 			s.logger.Warning("Access denied: %v", err)
 			http.Error(wr, "Access denied", http.StatusForbidden)
@@ -131,7 +133,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	}
 	resp, err := s.httptransport.RoundTrip(req)
 	if err != nil {
-		var accessErr dialer.ErrAccessDenied
+		var accessErr derrors.ErrAccessDenied
 		if errors.As(err, &accessErr) {
 			s.logger.Warning("Access denied: %v", err)
 			http.Error(wr, "Access denied", http.StatusForbidden)
@@ -189,8 +191,8 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		}
 	}
 	ctx := req.Context()
-	ctx = dialer.BoundDialerParamsToContext(ctx, ipHints, trimAddrPort(localAddr))
-	ctx = dialer.FilterParamsToContext(ctx, req, username)
+	ctx = ddto.BoundDialerParamsToContext(ctx, ipHints, trimAddrPort(localAddr))
+	ctx = ddto.FilterParamsToContext(ctx, req, username)
 	req = req.WithContext(ctx)
 	delHopHeaders(req.Header)
 	if isConnect {

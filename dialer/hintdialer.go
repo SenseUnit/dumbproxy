@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -15,17 +16,6 @@ var (
 	ErrBadIPAddressLength = errors.New("bad IP address length")
 	ErrUnknownNetwork     = errors.New("unknown network")
 )
-
-type boundDialerContextKey struct{}
-
-type boundDialerContextValue struct {
-	Hints     *string
-	LocalAddr string
-}
-
-func BoundDialerParamsToContext(ctx context.Context, hints *string, localAddr string) context.Context {
-	return context.WithValue(ctx, boundDialerContextKey{}, boundDialerContextValue{hints, localAddr})
-}
 
 type BoundDialer struct {
 	defaultDialer Dialer
@@ -45,11 +35,11 @@ func NewBoundDialer(defaultDialer Dialer, defaultHints string) *BoundDialer {
 func (d *BoundDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	hints := d.defaultHints
 	lAddr := ""
-	if hintsOverrideValue, ok := ctx.Value(boundDialerContextKey{}).(boundDialerContextValue); ok {
-		if hintsOverrideValue.Hints != nil {
-			hints = *hintsOverrideValue.Hints
+	if h, la, ok := dto.BoundDialerParamsFromContext(ctx); ok {
+		if h != nil {
+			hints = *h
 		}
-		lAddr = hintsOverrideValue.LocalAddr
+		lAddr = la
 	}
 
 	parsedHints, err := parseHints(hints, lAddr)

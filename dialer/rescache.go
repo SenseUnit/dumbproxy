@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
 	"github.com/jellydator/ttlcache/v3"
 )
@@ -103,6 +104,8 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 	if res.err != nil {
 		return nil, res.err
 	}
+
+	ctx = dto.OrigDstToContext(ctx, address)
 
 	var dialErr error
 	var conn net.Conn

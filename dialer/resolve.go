@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 
+	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
 )
 
@@ -59,6 +60,8 @@ func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address
 	for i := range res {
 		res[i] = res[i].Unmap()
 	}
+
+	ctx = dto.OrigDstToContext(ctx, address)
 
 	var dialErr error
 	var conn net.Conn

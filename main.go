@@ -18,6 +18,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ func (l *PrefixList) Set(s string) error {
 		}
 		pfx, err := netip.ParsePrefix(part)
 		if err != nil {
-			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, err)
+			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, part, err)
 		}
 		pfxList = append(pfxList, pfx)
 	}
@@ -168,39 +169,47 @@ func (a *TLSVersionArg) String() string {
 	}
 }
 
+type proxyArg struct {
+	literal bool
+	value   string
+}
+
 type CLIArgs struct {
-	bind_address      string
-	auth              string
-	verbosity         int
-	cert, key, cafile string
-	list_ciphers      bool
-	ciphers           string
-	disableHTTP2      bool
-	showVersion       bool
-	autocert          bool
-	autocertWhitelist CSVArg
-	autocertDir       string
-	autocertACME      string
-	autocertEmail     string
-	autocertHTTP      string
-	passwd            string
-	passwdCost        int
-	hmacSign          bool
-	hmacGenKey        bool
-	positionalArgs    []string
-	proxy             []string
-	sourceIPHints     string
-	userIPHints       bool
-	minTLSVersion     TLSVersionArg
-	maxTLSVersion     TLSVersionArg
-	bwLimit           uint64
-	bwBuckets         uint
-	bwSeparate        bool
-	dnsCacheTTL       time.Duration
-	dnsCacheNegTTL    time.Duration
-	dnsCacheTimeout   time.Duration
-	reqHeaderTimeout  time.Duration
-	denyDstAddr       PrefixList
+	bind_address            string
+	auth                    string
+	verbosity               int
+	cert, key, cafile       string
+	list_ciphers            bool
+	ciphers                 string
+	disableHTTP2            bool
+	showVersion             bool
+	autocert                bool
+	autocertWhitelist       CSVArg
+	autocertDir             string
+	autocertACME            string
+	autocertEmail           string
+	autocertHTTP            string
+	passwd                  string
+	passwdCost              int
+	hmacSign                bool
+	hmacGenKey              bool
+	positionalArgs          []string
+	proxy                   []proxyArg
+	sourceIPHints           string
+	userIPHints             bool
+	minTLSVersion           TLSVersionArg
+	maxTLSVersion           TLSVersionArg
+	bwLimit                 uint64
+	bwBuckets               uint
+	bwSeparate              bool
+	dnsCacheTTL             time.Duration
+	dnsCacheNegTTL          time.Duration
+	dnsCacheTimeout         time.Duration
+	reqHeaderTimeout        time.Duration
+	denyDstAddr             PrefixList
+	jsAccessFilter          string
+	jsAccessFilterInstances int
+	jsProxyRouterInstances  int
 }
 
 func parse_args() CLIArgs {
@@ -243,7 +252,7 @@ func parse_args() CLIArgs {
 		"Positional arguments are: hex-encoded HMAC key, username, validity duration.")
 	flag.BoolVar(&args.hmacGenKey, "hmac-genkey", false, "generate hex-encoded HMAC signing key of optimal length")
 	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
-		args.proxy = append(args.proxy, p)
+		args.proxy = append(args.proxy, proxyArg{true, p})
 		return nil
 	})
 	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
@@ -258,6 +267,13 @@ func parse_args() CLIArgs {
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
 	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
+	flag.StringVar(&args.jsAccessFilter, "js-access-filter", "", "path to JS script file with the \"access\" filter function")
+	flag.IntVar(&args.jsAccessFilterInstances, "js-access-filter-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle access filter requests")
+	flag.IntVar(&args.jsProxyRouterInstances, "js-proxy-router-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle proxy router requests")
+	flag.Func("js-proxy-router", "path to JS script file with the \"getProxy\" function", func(p string) error {
+		args.proxy = append(args.proxy, proxyArg{false, p})
+		return nil
+	})
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -316,6 +332,12 @@ func run() int {
 	authLogger := clog.NewCondLogger(log.New(logWriter, "AUTH    : ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	jsAccessLogger := clog.NewCondLogger(log.New(logWriter, "JSACCESS: ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
+	jsRouterLogger := clog.NewCondLogger(log.New(logWriter, "JSROUTER: ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
 	// setup auth provider
 	auth, err := auth.NewAuth(args.auth, authLogger)
@@ -327,6 +349,19 @@ func run() int {
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
+	if args.jsAccessFilter != "" {
+		j, err := access.NewJSFilter(
+			args.jsAccessFilter,
+			args.jsAccessFilterInstances,
+			jsAccessLogger,
+			filterRoot,
+		)
+		if err != nil {
+			mainLogger.Critical("Failed to run JS filter: %v", err)
+			return 3
+		}
+		filterRoot = j
+	}
 	if len(args.denyDstAddr.Value()) > 0 {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
@@ -334,15 +369,37 @@ func run() int {
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	if len(args.proxy) > 0 {
-		for _, proxyURL := range args.proxy {
-			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, dialerRoot)
-			if err != nil {
-				mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
-				return 3
+		for _, proxy := range args.proxy {
+			if proxy.literal {
+				newDialer, err := dialer.ProxyDialerFromURL(proxy.value, dialerRoot)
+				if err != nil {
+					mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxy.value, err)
+					return 3
+				}
+				dialerRoot = dialer.AlwaysRequireHostname(newDialer)
+			} else {
+				newDialer, err := dialer.NewJSRouter(
+					proxy.value,
+					args.jsProxyRouterInstances,
+					func(root dialer.Dialer) func(url string) (dialer.Dialer, error) {
+						return func(url string) (dialer.Dialer, error) {
+							d, err := dialer.ProxyDialerFromURL(url, root)
+							if err != nil {
+								return nil, err
+							}
+							return dialer.AlwaysRequireHostname(d), nil
+						}
+					}(dialerRoot),
+					jsRouterLogger,
+					dialerRoot,
+				)
+				if err != nil {
+					mainLogger.Critical("Failed to create JS proxy router: %v", err)
+					return 3
+				}
+				dialerRoot = newDialer
 			}
-			dialerRoot = newDialer
 		}
-		dialerRoot = dialer.AlwaysRequireHostname(dialerRoot)
 	}
 
 	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
