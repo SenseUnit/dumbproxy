@@ -104,6 +104,8 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 		return nil, res.err
 	}
 
+	ctx = OrigDstToContext(ctx, address)
+
 	var dialErr error
 	var conn net.Conn
 

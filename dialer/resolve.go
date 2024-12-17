@@ -25,6 +25,17 @@ func NewNameResolvingDialer(next Dialer, resolver Resolver) NameResolvingDialer 
 	}
 }
 
+type origDstKey struct{}
+
+func OrigDstFromContext(ctx context.Context) (string, bool) {
+	orig, ok := ctx.Value(origDstKey{}).(string)
+	return orig, ok
+}
+
+func OrigDstToContext(ctx context.Context, dst string) context.Context {
+	return context.WithValue(ctx, origDstKey{}, dst)
+}
+
 func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	if WantsHostname(ctx, network, address, nrd.next) {
 		return nrd.next.DialContext(ctx, network, address)
@@ -59,6 +70,8 @@ func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address
 	for i := range res {
 		res[i] = res[i].Unmap()
 	}
+
+	ctx = OrigDstToContext(ctx, address)
 
 	var dialErr error
 	var conn net.Conn

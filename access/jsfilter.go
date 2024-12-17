@@ -103,9 +103,9 @@ func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilt
 	}
 
 	return &JSFilter{
-		vm:     vm,
-		f:      f,
-		next:   next,
+		vm:   vm,
+		f:    f,
+		next: next,
 	}, nil
 }
 
