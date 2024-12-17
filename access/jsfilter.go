@@ -15,7 +15,7 @@ import (
 
 var ErrJSDenied = errors.New("denied by JS filter")
 
-type JSFilterFunc = func(req *jsext.JSRequestInfo, username, network, address string) (bool, error)
+type JSFilterFunc = func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, username string) (bool, error)
 
 // JSFilter is not suitable for concurrent use!
 // Wrap it with filter pool for that!
@@ -65,7 +65,11 @@ func NewJSFilter(filename string, logger *clog.CondLogger, next Filter) (*JSFilt
 
 func (j *JSFilter) Access(ctx context.Context, req *http.Request, username, network, address string) error {
 	ri := jsext.JSRequestInfoFromRequest(req)
-	res, err := j.f(ri, username, network, address)
+	di, err := jsext.JSDstInfoFromContext(ctx, network, address)
+	if err != nil {
+		return fmt.Errorf("unable to construct dst info: %w", err)
+	}
+	res, err := j.f(ri, di, username)
 	if err != nil {
 		return fmt.Errorf("JS access script exception: %w", err)
 	}
