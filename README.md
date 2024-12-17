@@ -24,6 +24,9 @@ Dumbest HTTP proxy ever.
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 * systemd socket activation
+* Scripting with JavaScript:
+  * Access filter by JS function
+  * Upstream proxy selection by JS function
 
 ## Installation
 
@@ -175,6 +178,101 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `blacklist` - location of file with list of serial numbers of blocked certificates, one per each line in form of hex-encoded colon-separated bytes. Example: `ab:01:02:03`. Empty lines and comments starting with `#` are ignored.
   * `reload` - interval for certificate blacklist file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
 
+## Scripting
+
+With the dumbproxy, it is possible to modify request processing behaviour using simple scripts written in the JavaScript programming language.
+
+### Access filter by JS script
+
+It is possible to filter (allow or deny) requests with simple `access` JS function. Such function can be loaded with the `-js-access-filter` option. Option value must specify location of script file where `access` function is defined.
+
+`access` function is invoked with following parameters:
+
+1. **Request** *(Object)*. It contains following properties:
+   * **method** *(String)* - HTTP method used in request (CONNECT, GET, POST, PUT, etc.).
+   * **url** *(String)* - URL parsed from the URI supplied on the Request-Line.
+   * **proto** *(String)* - the protocol version for incoming server requests.
+   * **protoMajor** *(Number)* - numeric major protocol version.
+   * **protoMinor** *(Number)* - numeric minor protocol version.
+   * **header** *(Object)* - mapping of *String* headers (except Host) in canonical form to an *Array* of their *String* values.
+   * **contentLength** *(Number)* - length of request body, if known.
+   * **transferEncoding** *(Array)* - lists the request's transfer encodings from outermost to innermost.
+   * **host** *(String)* - specifies the host on which the URL is sought. For HTTP/1 (per RFC 7230, section 5.4), this is either the value of the "Host" header or the host name given in the URL itself. For HTTP/2, it is the value of the ":authority" pseudo-header field.
+   * **remoteAddr** *(String)* - client's IP:port.
+   * **requestURI** *(String)* - the unmodified request-target of the Request-Line (RFC 7230, Section 3.1.1) as sent by the client to a server.
+2. **Destination address** *(Object)*. It's an address where actual connection is about to be created. It contains following properties:
+   * **network** *(String)* - connection type. Should be `"tcp"` in most cases unless restricted to specific address family (`"tcp4"` or `"tcp6"`).
+   * **originalHost** *(String)* - original hostname or IP address parsed from request.
+   * **resolvedHost** *(String)* - resolved hostname from request or `null` if resolving was not performed (e.g. if upstream dialer is a proxy).
+   * **port** *(Number)* - port number.
+3. **Username** *(String)*. Name of the authenticated user or an empty string if there is no authentication.
+
+`access` function must return boolean value, `true` allows request and `false` forbids it. Any exception will be reported to log and the corresponding request will be denied.
+
+Also it is possible to use builtin `print` function to print arbitrary values into dumbproxy log for debugging purposes.
+
+Example:
+
+```js
+// Deny unsafe ports for HTTP and non-SSL ports for HTTPS.
+
+const SSL_ports = [
+	443,
+]
+const Safe_ports = [
+	80,                // http
+	21,                // ftp
+	443,               // https
+	70,                // gopher
+	210,               // wais
+	280,               // http-mgmt
+	488,               // gss-http
+	591,               // filemaker
+	777,               // multiling http
+]
+const highPortBase = 1025
+
+function access(req, dst, username) {
+	if (req.method == "CONNECT") {
+		if (SSL_ports.includes(dst.port)) return true
+	} else {
+		if (dst.port >= highPortBase || Safe_ports.includes(dst.port)) return true
+	}
+	return false
+}
+```
+
+### Upstream proxy selection by JS script
+
+dumbproxy can select upstream proxy dynamically invoking `getProxy` JS function from file specified by `-js-proxy-router` option.
+
+Note that this option can be repeated multiple times, same as `-proxy` option for chaining of proxies. These two options can be used together and order of chaining will be as they come in command line. For generalization purposes we can say that `-proxy` option is equivalent to `-js-proxy-router` option with script which returns just one static proxy.
+
+`getProxy` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it is expected to return proxy URL in string format *scheme://[user:password@]host:port* or empty string `""` if no additional upstream proxy needed (i.e. direct connection if there are no other proxy dialers defined in chain).
+
+Supported proxy schemes are:
+* `http` - regular HTTP proxy with the CONNECT method support.
+* `https` - HTTP proxy over TLS connection.
+* `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy.
+
+Example:
+
+```js
+// Redirect .onion hidden domains to Tor SOCKS5 proxy
+
+function getProxy(req, dst, username) {
+	if (dst.originalHost.replace(/\.$/, "").toLowerCase().endsWith(".onion")) {
+		return "socks5://127.0.0.1:9050"
+	}
+	return ""
+}
+```
+
+> [!NOTE]  
+> `getProxy` can be invoked once or twice per request. If first invocation with `null` resolved host address returns "direct" mode and no other dialer has suppressed name resolving, name resolution will be performed and `getProxy` will be invoked once again with resolved address for the final decision.
+> 
+> This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
+
 ## Synopsis
 
 ```
@@ -224,6 +322,14 @@ Usage of /home/user/go/bin/dumbproxy:
     	sign username with specified key for given validity period. Positional arguments are: hex-encoded HMAC key, username, validity duration.
   -ip-hints string
     	a comma-separated list of source addresses to use on dial attempts. "$lAddr" gets expanded to local address of connection. Example: "10.0.0.1,fe80::2,$lAddr,0.0.0.0,::"
+  -js-access-filter string
+    	path to JS script file with the "access" filter function
+  -js-access-filter-instances int
+    	number of JS VM instances to handle access filter requests (default 4)
+  -js-proxy-router value
+    	path to JS script file with the "getProxy" function
+  -js-proxy-router-instances int
+    	number of JS VM instances to handle proxy router requests (default 4)
   -key string
     	key for TLS certificate
   -list-ciphers

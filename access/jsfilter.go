@@ -21,7 +21,7 @@ type JSFilterFunc = func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, usernam
 // Wrap it with filter pool for that!
 type JSFilter struct {
 	funcPool chan JSFilterFunc
-	next Filter
+	next     Filter
 }
 
 func NewJSFilter(filename string, instances int, logger *clog.CondLogger, next Filter) (*JSFilter, error) {
@@ -65,7 +65,7 @@ func NewJSFilter(filename string, instances int, logger *clog.CondLogger, next F
 
 	return &JSFilter{
 		funcPool: pool,
-		next: next,
+		next:     next,
 	}, nil
 }
 
