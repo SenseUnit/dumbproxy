@@ -350,17 +350,17 @@ func run() int {
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
 	if args.jsAccessFilter != "" {
-		fp, err := access.NewFilterPool(
+		j, err := access.NewJSFilter(
+			args.jsAccessFilter,
 			args.jsAccessFilterInstances,
-			func() (access.Filter, error) {
-				return access.NewJSFilter(args.jsAccessFilter, jsAccessLogger, filterRoot)
-			},
+			jsAccessLogger,
+			filterRoot,
 		)
 		if err != nil {
 			mainLogger.Critical("Failed to run JS filter: %v", err)
 			return 3
 		}
-		filterRoot = fp
+		filterRoot = j
 	}
 	if len(args.denyDstAddr.Value()) > 0 {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
