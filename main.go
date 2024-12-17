@@ -86,7 +86,7 @@ func (l *PrefixList) Set(s string) error {
 		}
 		pfx, err := netip.ParsePrefix(part)
 		if err != nil {
-			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, err)
+			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, part, err)
 		}
 		pfxList = append(pfxList, pfx)
 	}
@@ -169,6 +169,11 @@ func (a *TLSVersionArg) String() string {
 	}
 }
 
+type proxyArg struct {
+	literal bool
+	value   string
+}
+
 type CLIArgs struct {
 	bind_address            string
 	auth                    string
@@ -189,7 +194,7 @@ type CLIArgs struct {
 	hmacSign                bool
 	hmacGenKey              bool
 	positionalArgs          []string
-	proxy                   []string
+	proxy                   []proxyArg
 	sourceIPHints           string
 	userIPHints             bool
 	minTLSVersion           TLSVersionArg
@@ -204,6 +209,7 @@ type CLIArgs struct {
 	denyDstAddr             PrefixList
 	jsAccessFilter          string
 	jsAccessFilterInstances int
+	jsProxyRouterInstances  int
 }
 
 func parse_args() CLIArgs {
@@ -246,7 +252,7 @@ func parse_args() CLIArgs {
 		"Positional arguments are: hex-encoded HMAC key, username, validity duration.")
 	flag.BoolVar(&args.hmacGenKey, "hmac-genkey", false, "generate hex-encoded HMAC signing key of optimal length")
 	flag.Func("proxy", "upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443", func(p string) error {
-		args.proxy = append(args.proxy, p)
+		args.proxy = append(args.proxy, proxyArg{true, p})
 		return nil
 	})
 	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
@@ -263,6 +269,11 @@ func parse_args() CLIArgs {
 	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
 	flag.StringVar(&args.jsAccessFilter, "js-access-filter", "", "path to JS script file with the \"access\" filter function")
 	flag.IntVar(&args.jsAccessFilterInstances, "js-access-filter-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle access filter requests")
+	flag.IntVar(&args.jsProxyRouterInstances, "js-proxy-router-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle proxy router requests")
+	flag.Func("js-proxy-router", "path to JS script file with the \"getProxy\" function", func(p string) error {
+		args.proxy = append(args.proxy, proxyArg{false, p})
+		return nil
+	})
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -324,6 +335,9 @@ func run() int {
 	jsAccessLogger := clog.NewCondLogger(log.New(logWriter, "JSACCESS: ",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	jsRouterLogger := clog.NewCondLogger(log.New(logWriter, "JSROUTER: ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
 	// setup auth provider
 	auth, err := auth.NewAuth(args.auth, authLogger)
@@ -355,15 +369,35 @@ func run() int {
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	if len(args.proxy) > 0 {
-		for _, proxyURL := range args.proxy {
-			newDialer, err := dialer.ProxyDialerFromURL(proxyURL, dialerRoot)
-			if err != nil {
-				mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxyURL, err)
-				return 3
+		for _, proxy := range args.proxy {
+			if proxy.literal {
+				newDialer, err := dialer.ProxyDialerFromURL(proxy.value, dialerRoot)
+				if err != nil {
+					mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxy.value, err)
+					return 3
+				}
+				dialerRoot = dialer.AlwaysRequireHostname(newDialer)
+			} else {
+				newDialer, err := dialer.NewJSRouter(
+					proxy.value,
+					args.jsProxyRouterInstances,
+					func(url string) (dialer.Dialer, error) {
+						d, err := dialer.ProxyDialerFromURL(url, dialerRoot)
+						if err != nil {
+							return nil, err
+						}
+						return dialer.AlwaysRequireHostname(d), nil
+					},
+					jsRouterLogger,
+					dialerRoot,
+				)
+				if err != nil {
+					mainLogger.Critical("Failed to create JS proxy router: %v", err)
+					return 3
+				}
+				dialerRoot = newDialer
 			}
-			dialerRoot = newDialer
 		}
-		dialerRoot = dialer.AlwaysRequireHostname(dialerRoot)
 	}
 
 	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
