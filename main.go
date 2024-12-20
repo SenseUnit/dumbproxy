@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -212,6 +214,7 @@ type CLIArgs struct {
 	jsAccessFilter          string
 	jsAccessFilterInstances int
 	jsProxyRouterInstances  int
+	shutdownTimeout         time.Duration
 }
 
 func parse_args() CLIArgs {
@@ -277,6 +280,7 @@ func parse_args() CLIArgs {
 		args.proxy = append(args.proxy, proxyArg{false, p})
 		return nil
 	})
+	flag.DurationVar(&args.shutdownTimeout, "shutdown-timeout", 20*time.Second, "graceful shutdown timeout")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -524,10 +528,25 @@ func run() int {
 	}
 	mainLogger.Info("Proxy server started.")
 
+	shutdownComplete := make(chan struct{})
+
+	go func() {
+		stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt)
+		<-stopContext.Done()
+		mainLogger.Info("Shutting down...")
+		shutdownContext, cl := context.WithTimeout(context.Background(), args.shutdownTimeout)
+		defer cl()
+		server.Shutdown(shutdownContext)
+		close(shutdownComplete)
+	}()
+
 	// setup done
-	err = server.Serve(listener)
-	mainLogger.Critical("Server terminated with a reason: %v", err)
-	mainLogger.Info("Shutting down...")
+	if err := server.Serve(listener); err == http.ErrServerClosed {
+		// need to wait shutdown to exit
+		<-shutdownComplete
+	} else {
+		mainLogger.Critical("Server terminated with a reason: %v", err)
+	}
 	return 0
 }
 
