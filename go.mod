@@ -9,6 +9,7 @@ require (
 	github.com/dop251/goja v0.0.0-20241024094426-79f3a7efcdbd
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jellydator/ttlcache/v3 v3.3.0
+	github.com/libp2p/go-reuseport v0.4.0
 	github.com/tg123/go-htpasswd v1.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/crypto v0.31.0

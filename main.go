@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
+	"github.com/libp2p/go-reuseport"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
@@ -176,6 +177,7 @@ type proxyArg struct {
 
 type CLIArgs struct {
 	bind_address            string
+	bind_reuseport          bool
 	auth                    string
 	verbosity               int
 	cert, key, cafile       string
@@ -229,6 +231,7 @@ func parse_args() CLIArgs {
 		},
 	}
 	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
+	flag.BoolVar(&args.bind_reuseport, "bind-reuseport", false, "allow multiple server instances on the same port")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -470,7 +473,15 @@ func run() int {
 		}
 		listener = listeners[0]
 	} else {
-		newListener, err := net.Listen("tcp", args.bind_address)
+		listenerFactory := net.Listen
+		if args.bind_reuseport {
+			if reuseport.Available() {
+				listenerFactory = reuseport.Listen
+			} else {
+				mainLogger.Warning("reuseport was requested but not available!")
+			}
+		}
+		newListener, err := listenerFactory("tcp", args.bind_address)
 		if err != nil {
 			mainLogger.Critical("listen failed: %v", err)
 			return 3
