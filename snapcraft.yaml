@@ -2,7 +2,7 @@ name: dumbproxy
 version: '1.18.0'
 summary: Dumbest HTTP proxy ever.
 description: >
-  Dumbiest HTTP proxy ever. See documentation for details:
+  Dumbest HTTP proxy ever. See documentation for details:
   https://github.com/SenseUnit/dumbproxy/blob/master/README.md
 
 confinement: strict
