@@ -35,7 +35,7 @@ func ProxyDialerFromURL(proxyURL string, forward Dialer) (Dialer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct proxy dialer from URL %q: %w", proxyURL, err)
 	}
-	return MaybeWrapWithContextDialer(d), nil
+	return MaybeWrapWithHostnameWanter(MaybeWrapWithContextDialer(d)), nil
 }
 
 type wrappedDialer struct {

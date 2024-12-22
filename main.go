@@ -379,18 +379,14 @@ func run() int {
 					mainLogger.Critical("Failed to create dialer for proxy %q: %v", proxy.value, err)
 					return 3
 				}
-				dialerRoot = dialer.AlwaysRequireHostname(newDialer)
+				dialerRoot = newDialer
 			} else {
 				newDialer, err := dialer.NewJSRouter(
 					proxy.value,
 					args.jsProxyRouterInstances,
 					func(root dialer.Dialer) func(url string) (dialer.Dialer, error) {
 						return func(url string) (dialer.Dialer, error) {
-							d, err := dialer.ProxyDialerFromURL(url, root)
-							if err != nil {
-								return nil, err
-							}
-							return dialer.AlwaysRequireHostname(d), nil
+							return dialer.ProxyDialerFromURL(url, root)
 						}
 					}(dialerRoot),
 					jsRouterLogger,
