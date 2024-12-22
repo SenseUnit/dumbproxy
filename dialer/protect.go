@@ -40,3 +40,10 @@ func WantsHostname(ctx context.Context, net, address string, d Dialer) bool {
 	}
 	return false
 }
+
+func MaybeWrapWithHostnameWanter(d Dialer) Dialer {
+	if _, ok := d.(HostnameWanter); ok {
+		return d
+	}
+	return AlwaysRequireHostname(d)
+}

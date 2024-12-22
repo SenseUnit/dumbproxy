@@ -254,6 +254,7 @@ Supported proxy schemes are:
 * `http` - regular HTTP proxy with the CONNECT method support.
 * `https` - HTTP proxy over TLS connection.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy.
+* `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 
 Example:
 
