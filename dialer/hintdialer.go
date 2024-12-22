@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 
 	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
+	xproxy "golang.org/x/net/proxy"
 )
 
 var (
@@ -185,3 +187,41 @@ func parseHints(hints, lAddr string) ([]net.IP, error) {
 }
 
 var _ HostnameWanter = new(BoundDialer)
+
+type HintsSettingDialer struct {
+	hints string
+	next  Dialer
+}
+
+func NewHintsSettingDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
+	values, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("HintsSettingDialer parameter parsing failed: %w", err)
+	}
+
+	if !values.Has("hints") {
+		return nil, errors.New("no \"hints\" parameter is provided in HintsSettingDialer configuration URL")
+	}
+
+	return &HintsSettingDialer{
+		hints: values.Get("hints"),
+		next:  MaybeWrapWithContextDialer(next),
+	}, nil
+}
+
+func (hs *HintsSettingDialer) Dial(network, address string) (net.Conn, error) {
+	return hs.DialContext(context.Background(), network, address)
+}
+
+func (hs *HintsSettingDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	_, la, _ := dto.BoundDialerParamsFromContext(ctx)
+	ctx = dto.BoundDialerParamsToContext(ctx, &(hs.hints), la)
+	return hs.next.DialContext(ctx, network, address)
+}
+
+func (hs *HintsSettingDialer) WantsHostname(ctx context.Context, net, address string) bool {
+	return WantsHostname(ctx, net, address, hs.next)
+}
+
+var _ Dialer = new(HintsSettingDialer)
+var _ HostnameWanter = new(HintsSettingDialer)

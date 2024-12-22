@@ -25,6 +25,7 @@ func ProxyDialerFromURL(proxyURL string, forward Dialer) (Dialer, error) {
 	registerDialerTypesOnce.Do(func() {
 		xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
 		xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
+		xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
 	})
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
