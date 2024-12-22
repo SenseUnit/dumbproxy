@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"strings"
 	"sync"
 
 	xproxy "golang.org/x/net/proxy"
@@ -67,27 +66,9 @@ func (wd wrappedDialer) DialContext(ctx context.Context, network, address string
 	return conn, err
 }
 
-var _ HostnameWanter = new(BoundDialer)
-
 func MaybeWrapWithContextDialer(d LegacyDialer) Dialer {
 	if xd, ok := d.(Dialer); ok {
 		return xd
 	}
 	return wrappedDialer{d}
-}
-
-func parseIPList(list string) ([]net.IP, error) {
-	res := make([]net.IP, 0)
-	for _, elem := range strings.Split(list, ",") {
-		elem = strings.TrimSpace(elem)
-		if len(elem) == 0 {
-			continue
-		}
-		if parsed := net.ParseIP(elem); parsed == nil {
-			return nil, fmt.Errorf("unable to parse IP address %q", elem)
-		} else {
-			res = append(res, parsed)
-		}
-	}
-	return res, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/SenseUnit/dumbproxy/dialer/dto"
 	"github.com/hashicorp/go-multierror"
@@ -151,6 +152,22 @@ func ipToLAddr(network string, ip net.IP) (net.Addr, string, error) {
 	return lAddr, lNetwork, nil
 }
 
+func parseIPList(list string) ([]net.IP, error) {
+	res := make([]net.IP, 0)
+	for _, elem := range strings.Split(list, ",") {
+		elem = strings.TrimSpace(elem)
+		if len(elem) == 0 {
+			continue
+		}
+		if parsed := net.ParseIP(elem); parsed == nil {
+			return nil, fmt.Errorf("unable to parse IP address %q", elem)
+		} else {
+			res = append(res, parsed)
+		}
+	}
+	return res, nil
+}
+
 func parseHints(hints, lAddr string) ([]net.IP, error) {
 	hints = os.Expand(hints, func(key string) string {
 		switch key {
@@ -166,3 +183,5 @@ func parseHints(hints, lAddr string) ([]net.IP, error) {
 	}
 	return res, nil
 }
+
+var _ HostnameWanter = new(BoundDialer)
