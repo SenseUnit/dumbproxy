@@ -291,6 +291,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	email used for ACME registration
   -autocert-http string
     	listen address for HTTP-01 challenges handler of ACME
+  -autocert-local-cache-timeout duration
+    	timeout for cert cache queries (default 10s)
+  -autocert-local-cache-ttl duration
+    	enables in-memory cache for certificates
   -autocert-whitelist value
     	restrict autocert domains to this comma-separated list
   -bind-address string

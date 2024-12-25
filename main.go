@@ -32,6 +32,7 @@ import (
 
 	"github.com/SenseUnit/dumbproxy/access"
 	"github.com/SenseUnit/dumbproxy/auth"
+	"github.com/SenseUnit/dumbproxy/certcache"
 	"github.com/SenseUnit/dumbproxy/dialer"
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
@@ -177,43 +178,45 @@ type proxyArg struct {
 }
 
 type CLIArgs struct {
-	bindAddress             string
-	bindReusePort           bool
-	bindPprof               string
-	auth                    string
-	verbosity               int
-	cert, key, cafile       string
-	list_ciphers            bool
-	ciphers                 string
-	disableHTTP2            bool
-	showVersion             bool
-	autocert                bool
-	autocertWhitelist       CSVArg
-	autocertDir             string
-	autocertACME            string
-	autocertEmail           string
-	autocertHTTP            string
-	passwd                  string
-	passwdCost              int
-	hmacSign                bool
-	hmacGenKey              bool
-	positionalArgs          []string
-	proxy                   []proxyArg
-	sourceIPHints           string
-	userIPHints             bool
-	minTLSVersion           TLSVersionArg
-	maxTLSVersion           TLSVersionArg
-	bwLimit                 uint64
-	bwBuckets               uint
-	bwSeparate              bool
-	dnsCacheTTL             time.Duration
-	dnsCacheNegTTL          time.Duration
-	dnsCacheTimeout         time.Duration
-	reqHeaderTimeout        time.Duration
-	denyDstAddr             PrefixList
-	jsAccessFilter          string
-	jsAccessFilterInstances int
-	jsProxyRouterInstances  int
+	bindAddress               string
+	bindReusePort             bool
+	bindPprof                 string
+	auth                      string
+	verbosity                 int
+	cert, key, cafile         string
+	list_ciphers              bool
+	ciphers                   string
+	disableHTTP2              bool
+	showVersion               bool
+	autocert                  bool
+	autocertWhitelist         CSVArg
+	autocertDir               string
+	autocertACME              string
+	autocertEmail             string
+	autocertHTTP              string
+	autocertLocalCacheTTL     time.Duration
+	autocertLocalCacheTimeout time.Duration
+	passwd                    string
+	passwdCost                int
+	hmacSign                  bool
+	hmacGenKey                bool
+	positionalArgs            []string
+	proxy                     []proxyArg
+	sourceIPHints             string
+	userIPHints               bool
+	minTLSVersion             TLSVersionArg
+	maxTLSVersion             TLSVersionArg
+	bwLimit                   uint64
+	bwBuckets                 uint
+	bwSeparate                bool
+	dnsCacheTTL               time.Duration
+	dnsCacheNegTTL            time.Duration
+	dnsCacheTimeout           time.Duration
+	reqHeaderTimeout          time.Duration
+	denyDstAddr               PrefixList
+	jsAccessFilter            string
+	jsAccessFilterInstances   int
+	jsProxyRouterInstances    int
 }
 
 func parse_args() CLIArgs {
@@ -251,6 +254,8 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
+	flag.DurationVar(&args.autocertLocalCacheTTL, "autocert-local-cache-ttl", 0, "enables in-memory cache for certificates")
+	flag.DurationVar(&args.autocertLocalCacheTimeout, "autocert-local-cache-timeout", 10*time.Second, "timeout for cert cache queries")
 	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
 		"Username and password can be passed as positional arguments or requested interactively")
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
@@ -497,8 +502,19 @@ func run() int {
 		}
 		listener = tls.NewListener(listener, cfg)
 	} else if args.autocert {
+		var certCache autocert.Cache = autocert.DirCache(args.autocertDir)
+		if args.autocertLocalCacheTTL > 0 {
+			lcc := certcache.NewLocalCertCache(
+				certCache,
+				args.autocertLocalCacheTTL,
+				args.autocertLocalCacheTimeout,
+			)
+			lcc.Start()
+			defer lcc.Stop()
+			certCache = lcc
+		}
 		m := &autocert.Manager{
-			Cache:  autocert.DirCache(args.autocertDir),
+			Cache:  certCache,
 			Prompt: autocert.AcceptTOS,
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
 			Email:  args.autocertEmail,
