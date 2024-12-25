@@ -295,6 +295,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
+  -bind-pprof string
+    	enables pprof debug endpoints
   -bind-reuseport
     	allow multiple server instances on the same port
   -bw-limit uint
