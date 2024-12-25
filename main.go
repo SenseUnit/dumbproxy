@@ -177,6 +177,19 @@ type proxyArg struct {
 	value   string
 }
 
+type cacheKind int
+
+const (
+	cacheKindDir cacheKind = iota
+	cacheKindRedis
+	cacheKindRedisCluster
+)
+
+type autocertCache struct {
+	kind  cacheKind
+	value string
+}
+
 type CLIArgs struct {
 	bindAddress               string
 	bindReusePort             bool
@@ -190,7 +203,8 @@ type CLIArgs struct {
 	showVersion               bool
 	autocert                  bool
 	autocertWhitelist         CSVArg
-	autocertDir               string
+	autocertCache             autocertCache
+	autocertCacheRedisPrefix  string
 	autocertACME              string
 	autocertEmail             string
 	autocertHTTP              string
@@ -234,6 +248,10 @@ func parse_args() CLIArgs {
 			netip.MustParsePrefix("::/128"),
 			netip.MustParsePrefix("fe80::/10"),
 		},
+		autocertCache: autocertCache{
+			kind:  cacheKindDir,
+			value: filepath.Join(home, ".dumbproxy", "autocert"),
+		},
 	}
 	flag.StringVar(&args.bindAddress, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
@@ -250,7 +268,28 @@ func parse_args() CLIArgs {
 	flag.BoolVar(&args.showVersion, "version", false, "show program version and exit")
 	flag.BoolVar(&args.autocert, "autocert", false, "issue TLS certificates automatically")
 	flag.Var(&args.autocertWhitelist, "autocert-whitelist", "restrict autocert domains to this comma-separated list")
-	flag.StringVar(&args.autocertDir, "autocert-dir", filepath.Join(home, ".dumbproxy", "autocert"), "path to autocert cache")
+	flag.Func("autocert-dir", "use directory path for autocert cache", func(p string) error {
+		args.autocertCache = autocertCache{
+			kind:  cacheKindDir,
+			value: p,
+		}
+		return nil
+	})
+	flag.Func("autocert-cache-redis", "use Redis URL for autocert cache", func(p string) error {
+		args.autocertCache = autocertCache{
+			kind:  cacheKindRedis,
+			value: p,
+		}
+		return nil
+	})
+	flag.Func("autocert-cache-redis-cluster", "use Redis Cluster URL for autocert cache", func(p string) error {
+		args.autocertCache = autocertCache{
+			kind:  cacheKindRedisCluster,
+			value: p,
+		}
+		return nil
+	})
+	flag.StringVar(&args.autocertCacheRedisPrefix, "autocert-cache-redis-prefix", "", "prefix to use for keys in Redis or Redis Cluster cache")
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
@@ -502,7 +541,24 @@ func run() int {
 		}
 		listener = tls.NewListener(listener, cfg)
 	} else if args.autocert {
-		var certCache autocert.Cache = autocert.DirCache(args.autocertDir)
+		// cert caching chain
+		var certCache autocert.Cache
+		switch args.autocertCache.kind {
+		case cacheKindDir:
+			certCache = autocert.DirCache(args.autocertCache.value)
+		case cacheKindRedis:
+			certCache, err = certcache.RedisCacheFromURL(args.autocertCache.value, args.autocertCacheRedisPrefix)
+			if err != nil {
+				mainLogger.Critical("redis cache construction failed: %v", err)
+				return 3
+			}
+		case cacheKindRedisCluster:
+			certCache, err = certcache.RedisClusterCacheFromURL(args.autocertCache.value, args.autocertCacheRedisPrefix)
+			if err != nil {
+				mainLogger.Critical("redis cluster cache construction failed: %v", err)
+				return 3
+			}
+		}
 		if args.autocertLocalCacheTTL > 0 {
 			lcc := certcache.NewLocalCertCache(
 				certCache,
@@ -513,6 +569,7 @@ func run() int {
 			defer lcc.Stop()
 			certCache = lcc
 		}
+
 		m := &autocert.Manager{
 			Cache:  certCache,
 			Prompt: autocert.AcceptTOS,
