@@ -18,6 +18,10 @@ Dumbest HTTP proxy ever.
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
   * Supports client authentication with client TLS certificates
   * Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
+    * Certificate cache in local directory
+    * Certificate cache in Redis/Redis Cluster
+    * Optional local in-memory inner cache
+    * Optional AEAD encryption layer for cache
 * Per-user bandwidth limits
 * HTTP/2 support
 * Optional DNS cache
