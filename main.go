@@ -177,6 +177,27 @@ type proxyArg struct {
 	value   string
 }
 
+type hexArg struct {
+	value []byte
+}
+
+func (a *hexArg) String() string {
+	return hex.EncodeToString(a.value)
+}
+
+func (a *hexArg) Set(s string) error {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return err
+	}
+	a.value = b
+	return nil
+}
+
+func (a *hexArg) Value() []byte {
+	return a.value
+}
+
 type cacheKind int
 
 const (
@@ -189,6 +210,8 @@ type autocertCache struct {
 	kind  cacheKind
 	value string
 }
+
+const envCacheEncKey = "DUMBPROXY_CACHE_ENC_KEY"
 
 type CLIArgs struct {
 	bindAddress               string
@@ -210,6 +233,7 @@ type CLIArgs struct {
 	autocertHTTP              string
 	autocertLocalCacheTTL     time.Duration
 	autocertLocalCacheTimeout time.Duration
+	autocertCacheEncKey       hexArg
 	passwd                    string
 	passwdCost                int
 	hmacSign                  bool
@@ -253,6 +277,7 @@ func parse_args() CLIArgs {
 			value: filepath.Join(home, ".dumbproxy", "autocert"),
 		},
 	}
+	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
 	flag.StringVar(&args.bindAddress, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
 	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
 	flag.StringVar(&args.bindPprof, "bind-pprof", "", "enables pprof debug endpoints")
@@ -290,6 +315,7 @@ func parse_args() CLIArgs {
 		return nil
 	})
 	flag.StringVar(&args.autocertCacheRedisPrefix, "autocert-cache-redis-prefix", "", "prefix to use for keys in Redis or Redis Cluster cache")
+	flag.Var(&args.autocertCacheEncKey, "autocert-cache-enc-key", "hex-encoded encryption key for cert cache entries. Can be also set with "+envCacheEncKey+" environment variable")
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
@@ -556,6 +582,13 @@ func run() int {
 			certCache, err = certcache.RedisClusterCacheFromURL(args.autocertCache.value, args.autocertCacheRedisPrefix)
 			if err != nil {
 				mainLogger.Critical("redis cluster cache construction failed: %v", err)
+				return 3
+			}
+		}
+		if len(args.autocertCacheEncKey.Value()) > 0 {
+			certCache, err = certcache.NewEncryptedCache(args.autocertCacheEncKey.Value(), certCache)
+			if err != nil {
+				mainLogger.Critical("unable to construct cache encryption layer: %v", err)
 				return 3
 			}
 		}

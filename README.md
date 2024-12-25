@@ -285,6 +285,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	issue TLS certificates automatically
   -autocert-acme string
     	custom ACME endpoint (default "https://acme-v02.api.letsencrypt.org/directory")
+  -autocert-cache-enc-key value
+    	hex-encoded encryption key for cert cache entries. Can be also set with DUMBPROXY_CACHE_ENC_KEY environment variable
   -autocert-cache-redis value
     	use Redis URL for autocert cache
   -autocert-cache-redis-cluster value
