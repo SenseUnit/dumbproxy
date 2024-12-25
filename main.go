@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -176,8 +177,9 @@ type proxyArg struct {
 }
 
 type CLIArgs struct {
-	bind_address            string
-	bind_reuseport          bool
+	bindAddress             string
+	bindReusePort           bool
+	bindPprof               string
 	auth                    string
 	verbosity               int
 	cert, key, cafile       string
@@ -230,8 +232,9 @@ func parse_args() CLIArgs {
 			netip.MustParsePrefix("fe80::/10"),
 		},
 	}
-	flag.StringVar(&args.bind_address, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
-	flag.BoolVar(&args.bind_reuseport, "bind-reuseport", false, "allow multiple server instances on the same port")
+	flag.StringVar(&args.bindAddress, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
+	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
+	flag.StringVar(&args.bindPprof, "bind-pprof", "", "enables pprof debug endpoints")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -429,7 +432,7 @@ func run() int {
 	}
 
 	server := http.Server{
-		Addr: args.bind_address,
+		Addr: args.bindAddress,
 		Handler: handler.NewProxyHandler(&handler.Config{
 			Dialer:      dialerRoot,
 			Auth:        auth,
@@ -451,7 +454,7 @@ func run() int {
 
 	mainLogger.Info("Starting proxy server...")
 	var listener net.Listener
-	if args.bind_address == "" {
+	if args.bindAddress == "" {
 		// socket activation
 		listeners, err := activation.Listeners()
 		if err != nil {
@@ -470,14 +473,14 @@ func run() int {
 		listener = listeners[0]
 	} else {
 		listenerFactory := net.Listen
-		if args.bind_reuseport {
+		if args.bindReusePort {
 			if reuseport.Available() {
 				listenerFactory = reuseport.Listen
 			} else {
 				mainLogger.Warning("reuseport was requested but not available!")
 			}
 		}
-		newListener, err := listenerFactory("tcp", args.bind_address)
+		newListener, err := listenerFactory("tcp", args.bindAddress)
 		if err != nil {
 			mainLogger.Critical("listen failed: %v", err)
 			return 3
@@ -518,6 +521,17 @@ func run() int {
 		}
 		listener = tls.NewListener(listener, cfg)
 	}
+	// debug endpoints setup
+	if args.bindPprof != "" {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+		go func() { log.Fatal(http.ListenAndServe(args.bindPprof, mux)) }()
+	}
+
 	mainLogger.Info("Proxy server started.")
 
 	// setup done
