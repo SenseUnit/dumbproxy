@@ -43,7 +43,7 @@ Pre-built binaries available on [releases](https://github.com/SenseUnit/dumbprox
 Alternatively, you may install dumbproxy from source. Run within source directory
 
 ```
-go install
+go install .
 ```
 
 #### Docker
