@@ -3,7 +3,7 @@ dumbproxy
 
 [![dumbproxy](https://snapcraft.io//dumbproxy/badge.svg)](https://snapcraft.io/dumbproxy)
 
-Dumbest HTTP proxy ever.
+Simple, scriptable, secure forward proxy.
 
 ## Features
 
