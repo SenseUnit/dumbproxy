@@ -43,12 +43,6 @@ func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error)
 	}
 	auth.blacklist.Store(new(serialNumberSetFile))
 
-	if auth.blacklistFilename != "" {
-		if err := auth.reload(); err != nil {
-			return nil, fmt.Errorf("unable to load initial certificate blacklist: %w", err)
-		}
-	}
-
 	reloadInterval := 15 * time.Second
 	if reloadIntervalOption := values.Get("reload"); reloadIntervalOption != "" {
 		parsedInterval, err := time.ParseDuration(reloadIntervalOption)
@@ -57,8 +51,13 @@ func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error)
 		}
 		reloadInterval = parsedInterval
 	}
-	if reloadInterval > 0 {
-		go auth.reloadLoop(reloadInterval)
+	if auth.blacklistFilename != "" {
+		if err := auth.reload(); err != nil {
+			return nil, fmt.Errorf("unable to load initial certificate blacklist: %w", err)
+		}
+		if reloadInterval > 0 {
+			go auth.reloadLoop(reloadInterval)
+		}
 	}
 
 	return auth, nil
