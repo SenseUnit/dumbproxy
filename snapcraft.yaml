@@ -1,5 +1,5 @@
 name: dumbproxy
-version: '1.20.0'
+version: '1.20.1'
 summary: Simple, scriptable, secure forward proxy.
 description: >
   Dumbest HTTP proxy ever. See documentation for details:
