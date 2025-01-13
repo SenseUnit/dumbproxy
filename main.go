@@ -37,6 +37,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
+	proxyproto "github.com/pires/go-proxyproto"
 )
 
 var (
@@ -255,6 +256,7 @@ type CLIArgs struct {
 	jsAccessFilter            string
 	jsAccessFilterInstances   int
 	jsProxyRouterInstances    int
+	proxyproto                bool
 }
 
 func parse_args() CLIArgs {
@@ -350,6 +352,7 @@ func parse_args() CLIArgs {
 		args.proxy = append(args.proxy, proxyArg{false, p})
 		return nil
 	})
+	flag.BoolVar(&args.proxyproto, "proxyproto", false, "listen proxy protocol")
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -556,6 +559,11 @@ func run() int {
 			return 3
 		}
 		listener = newListener
+	}
+
+	if args.proxyproto {
+		mainLogger.Info("Listening proxy protocol")
+		listener = &proxyproto.Listener{Listener: listener}
 	}
 
 	if args.cert != "" {
