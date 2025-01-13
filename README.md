@@ -28,6 +28,7 @@ Simple, scriptable, secure forward proxy.
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
 * systemd socket activation
+* [Proxy protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) support for working behind a reverse proxy (HAProxy, Nginx)
 * Scripting with JavaScript:
   * Access filter by JS function
   * Upstream proxy selection by JS function
@@ -85,6 +86,48 @@ Run HTTPS proxy (HTTP proxy over TLS) with automatic certs from LetsEncrypt on p
 
 ```sh
 dumbproxy -bind-address :443 -auth 'static://?username=admin&password=123456' -autocert
+```
+
+### Example: HTTP proxy over TLS (pre-issued cert) behind Nginx reverse proxy performing SNI routing
+
+Run HTTPS proxy (HTTP proxy over TLS) with pre-issued cert listening proxy protocol on localhost's 10443 with `Basic` authentication (users and passwords in /etc/dumbproxy.htpasswd)):
+
+```sh
+dumbproxy \
+	-bind-address 127.0.0.1:10443 \
+	-proxyproto \
+	-auth basicfile://?path=/etc/dumbproxy.htpasswd \
+	-cert=/etc/letsencrypt/live/proxy.example.com/fullchain.pem \
+	-key=/etc/letsencrypt/live/proxy.example.com/privkey.pem
+```
+
+Nginx config snippet:
+
+```
+stream
+{
+	ssl_preread on;
+
+	map $ssl_preread_server_name $backend
+	{
+		proxy.example.com dumbproxy;
+		...
+	}
+
+	upstream dumbproxy
+	{
+		server 127.0.0.1:10443;
+	}
+
+	server
+	{
+		listen 443;
+		listen [::]:443;
+		proxy_protocol on;
+		proxy_pass $backend;
+	}
+
+}
 ```
 
 ### Example: HTTP proxy over TLS (BuyPass automatic certs)
@@ -311,6 +354,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
+  -proxyproto
+      listen proxy protocol
   -bind-pprof string
     	enables pprof debug endpoints
   -bind-reuseport
