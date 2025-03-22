@@ -1,7 +1,7 @@
 module github.com/SenseUnit/dumbproxy
 
 go 1.22
-toolchain go1.23.3
+toolchain go1.24.1
 
 require (
 	github.com/coreos/go-systemd/v22 v22.5.0
@@ -9,7 +9,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/libp2p/go-reuseport v0.4.0
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/tg123/go-htpasswd v1.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/crypto v0.35.0
