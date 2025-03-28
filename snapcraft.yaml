@@ -28,7 +28,7 @@ parts:
 
 apps:
   dumbproxy:
-    command: bin/dumbproxy
+    command: dumbproxy
     plugs:
       - network
       - network-bind
