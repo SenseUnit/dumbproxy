@@ -1,20 +1,30 @@
 name: dumbproxy
-version: '1.21.0'
 summary: Simple, scriptable, secure forward proxy.
 description: >
   Dumbest HTTP proxy ever. See documentation for details:
   https://github.com/SenseUnit/dumbproxy/blob/master/README.md
 
 confinement: strict
-base: core18
+base: core22
+adopt-info: dumbproxy
 
 parts:
   dumbproxy:
     plugin: go
-    go-importpath: github.com/SenseUnit/dumbproxy
-    source: .
+    build-snaps: [go/latest/stable]
     build-packages:
-      - gcc
+      - make
+      - git-core
+    source: https://github.com/SenseUnit/dumbproxy
+    source-type: git
+    override-pull: |
+      craftctl default
+      craftctl set version="$(git describe --long --tags --always --match=v*.*.* | sed 's/v//')"
+    override-build:
+      make &&
+      cp bin/dumbproxy "$SNAPCRAFT_PART_INSTALL"
+    stage:
+      - dumbproxy
 
 apps:
   dumbproxy:
