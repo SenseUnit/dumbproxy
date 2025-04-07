@@ -18,6 +18,8 @@ require (
 	golang.org/x/time v0.8.0
 )
 
+require golang.org/x/crypto/x509roots/fallback v0.0.0-20250406160420-959f8f3db0fb
+
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
