@@ -38,6 +38,8 @@ import (
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
 	proxyproto "github.com/pires/go-proxyproto"
+
+	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
 var (
