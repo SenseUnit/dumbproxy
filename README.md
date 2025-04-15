@@ -178,7 +178,7 @@ data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
 
 #### Option 2. Browser extension.
 
-Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://addons.mozilla.org/ru/firefox/addon/switchyomega/).
+Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://addons.mozilla.org/en-US/firefox/addon/zeroomega/).
 
 ### Using with Chrome
 
@@ -192,7 +192,7 @@ chromium-browser --proxy-server='https://example.com:8080'
 
 #### Option 2. Browser extension.
 
-Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://chrome.google.com/webstore/detail/proxy-switchyomega/padekgcemlokbadohgkifijomclgjgif).
+Use any proxy switching browser extension which supports HTTPS proxies like [this one](https://chromewebstore.google.com/detail/proxy-switchyomega-3-zero/pfnededegaaopdmhkdmcofjmoldfiped).
 
 ### Using with other applications
 
