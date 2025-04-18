@@ -16,38 +16,97 @@ import (
 	"sync"
 
 	xproxy "golang.org/x/net/proxy"
+
+	"github.com/SenseUnit/dumbproxy/tlsutil"
 )
 
 type HTTPProxyDialer struct {
-	address  string
-	tls      bool
-	userinfo *url.Userinfo
-	next     Dialer
+	address   string
+	tlsConfig *tls.Config
+	userinfo  *url.Userinfo
+	next      Dialer
 }
 
-func NewHTTPProxyDialer(address string, tls bool, userinfo *url.Userinfo, next LegacyDialer) *HTTPProxyDialer {
+func NewHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Userinfo, next LegacyDialer) *HTTPProxyDialer {
 	return &HTTPProxyDialer{
-		address:  address,
-		tls:      tls,
-		next:     MaybeWrapWithContextDialer(next),
-		userinfo: userinfo,
+		address:   address,
+		tlsConfig: tlsConfig,
+		next:      MaybeWrapWithContextDialer(next),
+		userinfo:  userinfo,
 	}
 }
 
 func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	host := u.Hostname()
 	port := u.Port()
-	tls := false
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse query string of proxy specification URL %q: %w", u.String(), err)
+	}
 
+	var tlsConfig *tls.Config
 	switch strings.ToLower(u.Scheme) {
 	case "http":
 		if port == "" {
 			port = "80"
 		}
 	case "https":
-		tls = true
 		if port == "" {
 			port = "443"
+		}
+		tlsConfig = &tls.Config{
+			ServerName: host,
+		}
+		if params.Has("cafile") {
+			roots, err := tlsutil.LoadCAfile(params.Get("cafile"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.RootCAs = roots
+		}
+		if params.Has("sni") {
+			tlsConfig.ServerName = params.Get("sni")
+			tlsConfig.InsecureSkipVerify = true
+			tlsConfig.VerifyConnection = tlsutil.ExpectPeerName(host, tlsConfig.RootCAs)
+		}
+		if params.Has("peername") {
+			tlsConfig.InsecureSkipVerify = true
+			tlsConfig.VerifyConnection = tlsutil.ExpectPeerName(params.Get("peername"), tlsConfig.RootCAs)
+		}
+		if params.Has("cert") {
+			cert, err := tls.LoadX509KeyPair(params.Get("cert"), params.Get("key"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.Certificates = []tls.Certificate{cert}
+		}
+		if params.Has("ciphers") {
+			cipherList, err := tlsutil.ParseCipherList(params.Get("ciphers"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.CipherSuites = cipherList
+		}
+		if params.Has("curves") {
+			curveList, err := tlsutil.ParseCurveList(params.Get("curves"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.CurvePreferences = curveList
+		}
+		if params.Has("min-tls-version") {
+			ver, err := tlsutil.ParseVersion(params.Get("min-tls-version"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.MinVersion = ver
+		}
+		if params.Has("max-tls-version") {
+			ver, err := tlsutil.ParseVersion(params.Get("max-tls-version"))
+			if err != nil {
+				return nil, err
+			}
+			tlsConfig.MaxVersion = ver
 		}
 	default:
 		return nil, errors.New("unsupported proxy type")
@@ -55,7 +114,7 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 
 	address := net.JoinHostPort(host, port)
 
-	return NewHTTPProxyDialer(address, tls, u.User, next), nil
+	return NewHTTPProxyDialer(address, tlsConfig, u.User, next), nil
 }
 
 func (d *HTTPProxyDialer) Dial(network, address string) (net.Conn, error) {
@@ -72,14 +131,8 @@ func (d *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 	if err != nil {
 		return nil, fmt.Errorf("proxy dialer is unable to make connection: %w", err)
 	}
-	if d.tls {
-		hostname, _, err := net.SplitHostPort(d.address)
-		if err != nil {
-			hostname = address
-		}
-		conn = tls.Client(conn, &tls.Config{
-			ServerName: hostname,
-		})
+	if d.tlsConfig != nil {
+		conn = tls.Client(conn, d.tlsConfig)
 	}
 
 	stopGuardEvent := make(chan struct{})
