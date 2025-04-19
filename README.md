@@ -295,13 +295,7 @@ dumbproxy can select upstream proxy dynamically invoking `getProxy` JS function 
 
 Note that this option can be repeated multiple times, same as `-proxy` option for chaining of proxies. These two options can be used together and order of chaining will be as they come in command line. For generalization purposes we can say that `-proxy` option is equivalent to `-js-proxy-router` option with script which returns just one static proxy.
 
-`getProxy` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it is expected to return proxy URL in string format *scheme://[user:password@]host:port* or empty string `""` if no additional upstream proxy needed (i.e. direct connection if there are no other proxy dialers defined in chain).
-
-Supported proxy schemes are:
-* `http` - regular HTTP proxy with the CONNECT method support.
-* `https` - HTTP proxy over TLS connection.
-* `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy.
-* `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
+`getProxy` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it is expected to return proxy URL in string format *scheme://[user:password@]host:port* or empty string `""` if no additional upstream proxy needed (i.e. direct connection if there are no other proxy dialers defined in chain). See [supported upstream proxy schemes](#supported-upstream-proxy-schemes) for details.
 
 Example:
 
@@ -320,6 +314,24 @@ function getProxy(req, dst, username) {
 > `getProxy` can be invoked once or twice per request. If first invocation with `null` resolved host address returns "direct" mode and no other dialer has suppressed name resolving, name resolution will be performed and `getProxy` will be invoked once again with resolved address for the final decision.
 > 
 > This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
+
+## Supported upstream proxy schemes
+
+Supported proxy schemes are:
+
+* `http` - regular HTTP proxy with the CONNECT method support. Examples: `http://example.org:3128`.
+* `https` - HTTP proxy over TLS connection. Examples: `https://user:password@example.org`, `https://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
+  * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
+  * `sni` - override value of ServerName Indication extension.
+  * `peername` - expect specified name in peer certificate. Empty string relaxes any name constraints.
+  * `cert` - file with user certificate for mutual TLS authentication. Should be used in conjunction with `key`.
+  * `key` - file with private key matching user certificate specified with `cert` option.
+  * `ciphers` - colon-separated list of enabled TLS ciphersuites.
+  * `curves` - colon-separated list of enabled TLS key exchange curves.
+  * `min-tls-version` - minimum TLS version.
+  * `max-tls-version` - maximum TLS version.
+* `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
+* `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 
 ## Synopsis
 
@@ -354,8 +366,6 @@ Usage of /home/user/go/bin/dumbproxy:
     	restrict autocert domains to this comma-separated list
   -bind-address string
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
-  -proxyproto
-      listen proxy protocol
   -bind-pprof string
     	enables pprof debug endpoints
   -bind-reuseport
@@ -372,6 +382,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	enable TLS and use certificate
   -ciphers string
     	colon-separated list of enabled ciphers
+  -curves string
+    	colon-separated list of enabled key exchange curves
   -deny-dst-addr value
     	comma-separated list of CIDR prefixes of forbidden IP addresses (default 127.0.0.0/8, 0.0.0.0/32, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, ::/128, fe80::/10)
   -disable-http2
@@ -400,16 +412,20 @@ Usage of /home/user/go/bin/dumbproxy:
     	key for TLS certificate
   -list-ciphers
     	list ciphersuites
+  -list-curves
+    	list key exchange curves
   -max-tls-version value
     	maximum TLS version accepted by server (default TLS13)
   -min-tls-version value
-    	minimal TLS version accepted by server (default TLS12)
+    	minimum TLS version accepted by server (default TLS12)
   -passwd string
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int
     	bcrypt password cost (for -passwd mode) (default 4)
   -proxy value
     	upstream proxy URL. Can be repeated multiple times to chain proxies. Examples: socks5h://127.0.0.1:9050; https://user:password@example.com:443
+  -proxyproto
+    	listen proxy protocol
   -req-header-timeout duration
     	amount of time allowed to read request headers (default 30s)
   -user-ip-hints

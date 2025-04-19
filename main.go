@@ -295,7 +295,7 @@ func parse_args() CLIArgs {
 	})
 	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
-	flag.Var(&args.minTLSVersion, "min-tls-version", "minimal TLS version accepted by server")
+	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
