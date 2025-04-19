@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -37,6 +35,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
+	"github.com/SenseUnit/dumbproxy/tlsutil"
 	proxyproto "github.com/pires/go-proxyproto"
 
 	_ "golang.org/x/crypto/x509roots/fallback"
@@ -118,61 +117,16 @@ func (l *PrefixList) Value() []netip.Prefix {
 type TLSVersionArg uint16
 
 func (a *TLSVersionArg) Set(s string) error {
-	var ver uint16
-	switch strings.ToUpper(s) {
-	case "TLS10":
-		ver = tls.VersionTLS10
-	case "TLS11":
-		ver = tls.VersionTLS11
-	case "TLS12":
-		ver = tls.VersionTLS12
-	case "TLS13":
-		ver = tls.VersionTLS13
-	case "TLS1.0":
-		ver = tls.VersionTLS10
-	case "TLS1.1":
-		ver = tls.VersionTLS11
-	case "TLS1.2":
-		ver = tls.VersionTLS12
-	case "TLS1.3":
-		ver = tls.VersionTLS13
-	case "10":
-		ver = tls.VersionTLS10
-	case "11":
-		ver = tls.VersionTLS11
-	case "12":
-		ver = tls.VersionTLS12
-	case "13":
-		ver = tls.VersionTLS13
-	case "1.0":
-		ver = tls.VersionTLS10
-	case "1.1":
-		ver = tls.VersionTLS11
-	case "1.2":
-		ver = tls.VersionTLS12
-	case "1.3":
-		ver = tls.VersionTLS13
-	case "":
-	default:
-		return fmt.Errorf("unknown TLS version %q", s)
+	ver, err := tlsutil.ParseVersion(s)
+	if err != nil {
+		return err
 	}
 	*a = TLSVersionArg(ver)
 	return nil
 }
 
 func (a *TLSVersionArg) String() string {
-	switch *a {
-	case tls.VersionTLS10:
-		return "TLS10"
-	case tls.VersionTLS11:
-		return "TLS11"
-	case tls.VersionTLS12:
-		return "TLS12"
-	case tls.VersionTLS13:
-		return "TLS13"
-	default:
-		return fmt.Sprintf("%#04x", *a)
-	}
+	return tlsutil.FormatVersion(uint16(*a))
 }
 
 type proxyArg struct {
@@ -224,7 +178,9 @@ type CLIArgs struct {
 	verbosity                 int
 	cert, key, cafile         string
 	list_ciphers              bool
+	list_curves               bool
 	ciphers                   string
+	curves                    string
 	disableHTTP2              bool
 	showVersion               bool
 	autocert                  bool
@@ -292,7 +248,9 @@ func parse_args() CLIArgs {
 	flag.StringVar(&args.key, "key", "", "key for TLS certificate")
 	flag.StringVar(&args.cafile, "cafile", "", "CA file to authenticate clients with certificates")
 	flag.BoolVar(&args.list_ciphers, "list-ciphers", false, "list ciphersuites")
+	flag.BoolVar(&args.list_curves, "list-curves", false, "list key exchange curves")
 	flag.StringVar(&args.ciphers, "ciphers", "", "colon-separated list of enabled ciphers")
+	flag.StringVar(&args.curves, "curves", "", "colon-separated list of enabled key exchange curves")
 	flag.BoolVar(&args.disableHTTP2, "disable-http2", false, "disable HTTP2")
 	flag.BoolVar(&args.showVersion, "version", false, "show program version and exit")
 	flag.BoolVar(&args.autocert, "autocert", false, "issue TLS certificates automatically")
@@ -337,7 +295,7 @@ func parse_args() CLIArgs {
 	})
 	flag.StringVar(&args.sourceIPHints, "ip-hints", "", "a comma-separated list of source addresses to use on dial attempts. \"$lAddr\" gets expanded to local address of connection. Example: \"10.0.0.1,fe80::2,$lAddr,0.0.0.0,::\"")
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
-	flag.Var(&args.minTLSVersion, "min-tls-version", "minimal TLS version accepted by server")
+	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
@@ -371,6 +329,11 @@ func run() int {
 
 	if args.list_ciphers {
 		list_ciphers()
+		return 0
+	}
+
+	if args.list_curves {
+		list_curves()
 		return 0
 	}
 
@@ -570,7 +533,8 @@ func run() int {
 
 	if args.cert != "" {
 		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile,
-			args.ciphers, uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
+			args.ciphers, args.curves,
+			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -629,7 +593,7 @@ func run() int {
 			}()
 		}
 		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers,
+		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, args.curves,
 			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
@@ -657,7 +621,7 @@ func run() int {
 	return 0
 }
 
-func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+func makeServerTLSConfig(certfile, keyfile, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
 	cfg := tls.Config{
 		MinVersion: minVer,
 		MaxVersion: maxVer,
@@ -668,18 +632,21 @@ func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, minVer, maxV
 	}
 	cfg.Certificates = []tls.Certificate{cert}
 	if cafile != "" {
-		roots := x509.NewCertPool()
-		certs, err := ioutil.ReadFile(cafile)
+		roots, err := tlsutil.LoadCAfile(cafile)
 		if err != nil {
 			return nil, err
-		}
-		if ok := roots.AppendCertsFromPEM(certs); !ok {
-			return nil, errors.New("Failed to load CA certificates")
 		}
 		cfg.ClientCAs = roots
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
-	cfg.CipherSuites = makeCipherList(ciphers)
+	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
+	if err != nil {
+		return nil, err
+	}
+	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
+	if err != nil {
+		return nil, err
+	}
 	if h2 {
 		cfg.NextProtos = []string{"h2", "http/1.1"}
 	} else {
@@ -688,20 +655,24 @@ func makeServerTLSConfig(certfile, keyfile, cafile, ciphers string, minVer, maxV
 	return &cfg, nil
 }
 
-func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
 	if cafile != "" {
-		roots := x509.NewCertPool()
-		certs, err := ioutil.ReadFile(cafile)
+		roots, err := tlsutil.LoadCAfile(cafile)
 		if err != nil {
 			return nil, err
-		}
-		if ok := roots.AppendCertsFromPEM(certs); !ok {
-			return nil, errors.New("Failed to load CA certificates")
 		}
 		cfg.ClientCAs = roots
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
-	cfg.CipherSuites = makeCipherList(ciphers)
+	var err error
+	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
+	if err != nil {
+		return nil, err
+	}
+	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
+	if err != nil {
+		return nil, err
+	}
 	if h2 {
 		cfg.NextProtos = []string{"h2", "http/1.1", "acme-tls/1"}
 	} else {
@@ -712,33 +683,15 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers string, minVer, maxV
 	return cfg, nil
 }
 
-func makeCipherList(ciphers string) []uint16 {
-	if ciphers == "" {
-		return nil
-	}
-
-	cipherIDs := make(map[string]uint16)
-	for _, cipher := range tls.CipherSuites() {
-		cipherIDs[cipher.Name] = cipher.ID
-	}
-
-	cipherNameList := strings.Split(ciphers, ":")
-	cipherIDList := make([]uint16, 0, len(cipherNameList))
-
-	for _, name := range cipherNameList {
-		id, ok := cipherIDs[name]
-		if !ok {
-			log.Printf("WARNING: Unknown cipher \"%s\"", name)
-		}
-		cipherIDList = append(cipherIDList, id)
-	}
-
-	return cipherIDList
-}
-
 func list_ciphers() {
 	for _, cipher := range tls.CipherSuites() {
 		fmt.Println(cipher.Name)
+	}
+}
+
+func list_curves() {
+	for _, curve := range tlsutil.Curves() {
+		fmt.Println(curve.String())
 	}
 }
 
