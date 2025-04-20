@@ -13,6 +13,7 @@ func init() {
 	xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
 	xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
 	xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
+	xproxy.RegisterDialerType("cached", GetCachedDialer)
 }
 
 type LegacyDialer interface {
