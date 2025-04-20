@@ -28,6 +28,10 @@ var (
 	dialerCacheSingleFlight = new(singleflight.Group)
 )
 
+func init() {
+	go dialerCache.Start()
+}
+
 func GetCachedDialer(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	params, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
