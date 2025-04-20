@@ -174,7 +174,7 @@ Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration
 data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
 ```
 
-![ff_https_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
+![ff\_https\_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
 
 #### Option 2. Browser extension.
 
@@ -196,7 +196,17 @@ Use any proxy switching browser extension which supports HTTPS proxies like [thi
 
 ### Using with other applications
 
-It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with help of external application which performs remote communication via TLS and exposes local plaintext socket. [steady-tun](https://github.com/Snawoot/steady-tun) appears to be most suitable for this because it supports connection pooling to hide connection delay.
+It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with the help of some application which performs remote communication via TLS and exposes local plaintext socket. dumbproxy itself can play this role and use upstream proxy to provide local proxy service. For example, command
+
+```
+dumbproxy -bind-address 127.0.0.1:8080 -proxy 'https://login:password@example.org'
+```
+
+would expose remote HTTPS proxy at example.org:443 with `login` and `password` on local port 8080 as a regular HTTP proxy without authentication. Or, if you prefer mTLS authentication, it would be
+
+```
+dumbproxy -bind-address 127.0.0.1:8080 -proxy 'https://example.org?cert=cert.pem&key=key.pem&cafile=ca.pem'
+```
 
 ### Using with Android
 
@@ -332,6 +342,9 @@ Supported proxy schemes are:
   * `max-tls-version` - maximum TLS version.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
+* `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
+   * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
+   * `ttl` - time to live for cache record. Examples: `15s`, `2m`, `1h`.
 
 ## Synopsis
 
