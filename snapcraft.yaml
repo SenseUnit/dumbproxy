@@ -19,7 +19,7 @@ parts:
     source-type: git
     override-pull: |
       craftctl default
-      craftctl set version="$(git describe --long --tags --always --match=v*.*.* | sed 's/v//')"
+      craftctl set version="$(git describe --tags --always --match=v*.*.* | sed 's/v//')"
     override-build:
       make &&
       cp bin/dumbproxy "$SNAPCRAFT_PART_INSTALL"
