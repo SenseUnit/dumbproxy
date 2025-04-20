@@ -5,10 +5,15 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"sync"
 
 	xproxy "golang.org/x/net/proxy"
 )
+
+func init() {
+	xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
+	xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
+	xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
+}
 
 type LegacyDialer interface {
 	Dial(network, address string) (net.Conn, error)
@@ -19,14 +24,7 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
-var registerDialerTypesOnce sync.Once
-
 func ProxyDialerFromURL(proxyURL string, forward Dialer) (Dialer, error) {
-	registerDialerTypesOnce.Do(func() {
-		xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
-		xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
-		xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
-	})
 	parsedURL, err := url.Parse(proxyURL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse proxy URL: %w", err)
