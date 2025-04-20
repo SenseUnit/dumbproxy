@@ -196,7 +196,17 @@ Use any proxy switching browser extension which supports HTTPS proxies like [thi
 
 ### Using with other applications
 
-It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with help of external application which performs remote communication via TLS and exposes local plaintext socket. [steady-tun](https://github.com/Snawoot/steady-tun) appears to be most suitable for this because it supports connection pooling to hide connection delay.
+It is possible to expose remote HTTPS proxy as a local plaintext HTTP proxy with the help of some application which performs remote communication via TLS and exposes local plaintext socket. dumbproxy itself can play this role and use upstream proxy to provide local proxy service. For example, command
+
+```
+dumbproxy -bind-address 127.0.0.1:8080 -proxy 'https://login:password@example.org'
+```
+
+would expose remote HTTPS proxy at example.org:443 with `login` and `password` on local port 8080 as a regular HTTP proxy without authentication. Or, if you prefer mTLS authentication, it would be
+
+```
+dumbproxy -bind-address 127.0.0.1:8080 -proxy 'https://example.org?cert=cert.pem&key=key.pem&cafile=ca.pem'
+```
 
 ### Using with Android
 
