@@ -174,7 +174,7 @@ Open Firefox proxy settings, switch proxy mode to "Automatic proxy configuration
 data:,function FindProxyForURL(u, h){return "HTTPS example.com:8080";}
 ```
 
-![ff_https_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
+![ff\_https\_proxy](https://user-images.githubusercontent.com/3524671/82768442-afea9e00-9e37-11ea-80fd-1eccf55b89fa.png)
 
 #### Option 2. Browser extension.
 
@@ -332,6 +332,9 @@ Supported proxy schemes are:
   * `max-tls-version` - maximum TLS version.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
+* `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
+   * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
+   * `ttl` - time to live for cache record. Examples: `15s`, `2m`, `1h`.
 
 ## Synopsis
 
