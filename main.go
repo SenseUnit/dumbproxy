@@ -6,10 +6,12 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/csv"
 	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -313,6 +315,7 @@ func parse_args() CLIArgs {
 		return nil
 	})
 	flag.BoolVar(&args.proxyproto, "proxyproto", false, "listen proxy protocol")
+	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
 	args.positionalArgs = flag.Args()
 	return args
@@ -807,6 +810,50 @@ func prompt(prompt string, secure bool) (string, error) {
 		fmt.Scanln(&input)
 	}
 	return input, nil
+}
+
+func readConfig(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("unable to open config file %q: %w", filename, err)
+	}
+	defer f.Close()
+	r := csv.NewReader(f)
+	r.Comma = ' '
+	r.Comment = '#'
+	r.FieldsPerRecord = -1
+	r.TrimLeadingSpace = true
+	r.ReuseRecord = true
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("configuration file parsing failed: %w", err)
+		}
+		switch len(record) {
+		case 0:
+			continue
+		case 1:
+			if err := flag.Set(record[0], "true"); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
+		case 2:
+			if err := flag.Set(record[0], record[1]); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
+		default:
+			unified := strings.Join(record[1:], " ")
+			if err := flag.Set(record[0], unified); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
+		}
+	}
+	return nil
 }
 
 func main() {
