@@ -346,6 +346,37 @@ Supported proxy schemes are:
    * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
    * `ttl` - time to live for cache record. Examples: `15s`, `2m`, `1h`.
 
+## Configuration files
+
+Reading options from configuration file is now supported too! For example, command from one of examples above:
+
+```
+dumbproxy \
+    -bind-address 127.0.0.1:10443 \
+    -proxyproto \
+    -auth basicfile://?path=/etc/dumbproxy.htpasswd \
+    -cert=/etc/letsencrypt/live/proxy.example.com/fullchain.pem \
+    -key=/etc/letsencrypt/live/proxy.example.com/privkey.pem
+```
+
+becomes just
+
+```
+dumbproxy -config dp.cfg
+```
+
+having dp.cfg file with following content:
+
+```
+bind-address 127.0.0.1:10443
+proxyproto
+auth basicfile://?path=/etc/dumbproxy.htpasswd
+cert /etc/letsencrypt/live/proxy.example.com/fullchain.pem
+key /etc/letsencrypt/live/proxy.example.com/privkey.pem
+```
+
+Configuration format is [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) CSV with space character (`" "`) as a field separator instead of comma, `#` as a comment start character. Lines with only one field are treated as boolean flags, lines with two or more fields are treated as a key and its value, having extra fields joined with space.
+
 ## Synopsis
 
 ```
@@ -395,6 +426,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	enable TLS and use certificate
   -ciphers string
     	colon-separated list of enabled ciphers
+  -config value
+    	read configuration from file with space-separated keys and values
   -curves string
     	colon-separated list of enabled key exchange curves
   -deny-dst-addr value
