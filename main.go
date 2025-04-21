@@ -836,12 +836,21 @@ func readConfig(filename string) error {
 		case 0:
 			continue
 		case 1:
-			flag.CommandLine.Set(record[0], "true")
+			if err := flag.Set(record[0], "true"); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
 		case 2:
-			flag.CommandLine.Set(record[0], record[1])
+			if err := flag.Set(record[0], record[1]); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
 		default:
 			unified := strings.Join(record[1:], " ")
-			flag.CommandLine.Set(record[0], unified)
+			if err := flag.Set(record[0], unified); err != nil {
+				line, _ := r.FieldPos(0)
+				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+			}
 		}
 	}
 	return nil
