@@ -39,12 +39,9 @@ func NewHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Use
 func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	host := u.Hostname()
 	port := u.Port()
-	params, err := url.ParseQuery(u.RawQuery)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse query string of proxy specification URL %q: %w", u.String(), err)
-	}
 
 	var tlsConfig *tls.Config
+	var err error
 	switch strings.ToLower(u.Scheme) {
 	case "http":
 		if port == "" {
@@ -54,59 +51,9 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 		if port == "" {
 			port = "443"
 		}
-		tlsConfig = &tls.Config{
-			ServerName: host,
-		}
-		if params.Has("cafile") {
-			roots, err := tlsutil.LoadCAfile(params.Get("cafile"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.RootCAs = roots
-		}
-		if params.Has("sni") {
-			tlsConfig.ServerName = params.Get("sni")
-			tlsConfig.InsecureSkipVerify = true
-			tlsConfig.VerifyConnection = tlsutil.ExpectPeerName(host, tlsConfig.RootCAs)
-		}
-		if params.Has("peername") {
-			tlsConfig.InsecureSkipVerify = true
-			tlsConfig.VerifyConnection = tlsutil.ExpectPeerName(params.Get("peername"), tlsConfig.RootCAs)
-		}
-		if params.Has("cert") {
-			cert, err := tls.LoadX509KeyPair(params.Get("cert"), params.Get("key"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.Certificates = []tls.Certificate{cert}
-		}
-		if params.Has("ciphers") {
-			cipherList, err := tlsutil.ParseCipherList(params.Get("ciphers"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.CipherSuites = cipherList
-		}
-		if params.Has("curves") {
-			curveList, err := tlsutil.ParseCurveList(params.Get("curves"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.CurvePreferences = curveList
-		}
-		if params.Has("min-tls-version") {
-			ver, err := tlsutil.ParseVersion(params.Get("min-tls-version"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.MinVersion = ver
-		}
-		if params.Has("max-tls-version") {
-			ver, err := tlsutil.ParseVersion(params.Get("max-tls-version"))
-			if err != nil {
-				return nil, err
-			}
-			tlsConfig.MaxVersion = ver
+		tlsConfig, err = tlsutil.TLSConfigFromURL(u)
+		if err != nil {
+			return nil, fmt.Errorf("TLS configuration failed: %w", err)
 		}
 	default:
 		return nil, errors.New("unsupported proxy type")

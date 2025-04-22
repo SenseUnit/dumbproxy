@@ -340,6 +340,17 @@ Supported proxy schemes are:
   * `curves` - colon-separated list of enabled TLS key exchange curves.
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
+* `h2` - HTTP/2 proxy over TLS connection. Examples: `h2://user:password@example.org`, `h2://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
+  * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
+  * `sni` - override value of ServerName Indication extension.
+  * `peername` - expect specified name in peer certificate. Empty string relaxes any name constraints.
+  * `cert` - file with user certificate for mutual TLS authentication. Should be used in conjunction with `key`.
+  * `key` - file with private key matching user certificate specified with `cert` option.
+  * `ciphers` - colon-separated list of enabled TLS ciphersuites.
+  * `curves` - colon-separated list of enabled TLS key exchange curves.
+  * `min-tls-version` - minimum TLS version.
+  * `max-tls-version` - maximum TLS version.
+* `h2c` - HTTP/2 proxy over plaintext connection with the CONNECT method support. Examples: `h2c://example.org:8080`.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 * `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:

@@ -12,6 +12,8 @@ import (
 func init() {
 	xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
 	xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
+	xproxy.RegisterDialerType("h2", H2ProxyDialerFromURL)
+	xproxy.RegisterDialerType("h2c", H2ProxyDialerFromURL)
 	xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
 	xproxy.RegisterDialerType("cached", GetCachedDialer)
 }

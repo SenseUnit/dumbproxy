@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -157,4 +158,67 @@ func FormatVersion(v uint16) string {
 	default:
 		return fmt.Sprintf("%#04x", v)
 	}
+}
+
+func TLSConfigFromURL(u *url.URL) (*tls.Config, error) {
+	host := u.Hostname()
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse query string of proxy specification URL %q: %w", u.String(), err)
+	}
+	tlsConfig := &tls.Config{
+		ServerName: host,
+	}
+	if params.Has("cafile") {
+		roots, err := LoadCAfile(params.Get("cafile"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.RootCAs = roots
+	}
+	if params.Has("sni") {
+		tlsConfig.ServerName = params.Get("sni")
+		tlsConfig.InsecureSkipVerify = true
+		tlsConfig.VerifyConnection = ExpectPeerName(host, tlsConfig.RootCAs)
+	}
+	if params.Has("peername") {
+		tlsConfig.InsecureSkipVerify = true
+		tlsConfig.VerifyConnection = ExpectPeerName(params.Get("peername"), tlsConfig.RootCAs)
+	}
+	if params.Has("cert") {
+		cert, err := tls.LoadX509KeyPair(params.Get("cert"), params.Get("key"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+	if params.Has("ciphers") {
+		cipherList, err := ParseCipherList(params.Get("ciphers"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.CipherSuites = cipherList
+	}
+	if params.Has("curves") {
+		curveList, err := ParseCurveList(params.Get("curves"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.CurvePreferences = curveList
+	}
+	if params.Has("min-tls-version") {
+		ver, err := ParseVersion(params.Get("min-tls-version"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.MinVersion = ver
+	}
+	if params.Has("max-tls-version") {
+		ver, err := ParseVersion(params.Get("max-tls-version"))
+		if err != nil {
+			return nil, err
+		}
+		tlsConfig.MaxVersion = ver
+	}
+	return tlsConfig, nil
 }
