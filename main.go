@@ -486,11 +486,17 @@ func run() int {
 		ReadHeaderTimeout: args.reqHeaderTimeout,
 		WriteTimeout:      0,
 		IdleTimeout:       0,
+		Protocols:         new(http.Protocols),
 	}
 
 	// listener setup
 	if args.disableHTTP2 {
 		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
+		server.Protocols.SetHTTP1(true)
+	} else {
+		server.Protocols.SetHTTP1(true)
+		server.Protocols.SetHTTP2(true)
+		server.Protocols.SetUnencryptedHTTP2(true)
 	}
 
 	mainLogger.Info("Starting proxy server...")
