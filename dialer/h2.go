@@ -169,3 +169,7 @@ func (c *h2Conn) SetReadDeadline(t time.Time) error {
 func (c *h2Conn) SetWriteDeadline(t time.Time) error {
 	return &net.OpError{Op: "set", Net: "h2", Source: nil, Addr: nil, Err: errors.New("deadline not supported")}
 }
+
+func (c *h2Conn) CloseWrite() error {
+	return c.w.Close()
+}
