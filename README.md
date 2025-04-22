@@ -23,7 +23,7 @@ Simple, scriptable, secure forward proxy.
     * Optional local in-memory inner cache
     * Optional AEAD encryption layer for cache
 * Per-user bandwidth limits
-* HTTP/2 support
+* HTTP/2 support, both server and client, including h2c support
 * Optional DNS cache
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
