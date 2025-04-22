@@ -97,7 +97,7 @@ func (d *H2ProxyDialer) DialContext(ctx context.Context, network, address string
 		scheme = "http"
 	}
 	pr, pw := io.Pipe()
-	connCtx, connCl := context.WithCancel(context.Background())
+	connCtx, connCl := context.WithCancel(ctx)
 	req := (&http.Request{
 		Method: "CONNECT",
 		URL: &url.URL{
