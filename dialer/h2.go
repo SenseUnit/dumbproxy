@@ -97,7 +97,8 @@ func (d *H2ProxyDialer) DialContext(ctx context.Context, network, address string
 		scheme = "http"
 	}
 	pr, pw := io.Pipe()
-	req := &http.Request{
+	connCtx, connCl := context.WithCancel(context.Background())
+	req := (&http.Request{
 		Method: "CONNECT",
 		URL: &url.URL{
 			Scheme: scheme,
@@ -108,7 +109,7 @@ func (d *H2ProxyDialer) DialContext(ctx context.Context, network, address string
 		},
 		Body: pr,
 		Host: address,
-	}
+	}).WithContext(connCtx)
 	if d.userinfo != nil {
 		req.Header.Set("Proxy-Authorization", basicAuthHeader(d.userinfo))
 	}
@@ -122,14 +123,16 @@ func (d *H2ProxyDialer) DialContext(ctx context.Context, network, address string
 		return nil, errors.New(resp.Status)
 	}
 	return &h2Conn{
-		r: resp.Body,
-		w: pw,
+		r:  resp.Body,
+		w:  pw,
+		cl: connCl,
 	}, nil
 }
 
 type h2Conn struct {
-	r io.Reader
-	w io.Writer
+	r  io.ReadCloser
+	w  io.WriteCloser
+	cl func()
 }
 
 func (c *h2Conn) Read(b []byte) (n int, err error) {
@@ -141,13 +144,8 @@ func (c *h2Conn) Write(b []byte) (n int, err error) {
 }
 
 func (c *h2Conn) Close() (err error) {
-	if w, ok := c.w.(io.Closer); ok {
-		err = w.Close()
-	}
-	if r, ok := c.r.(io.Closer); ok {
-		err = r.Close()
-	}
-	return
+	defer c.cl()
+	return errors.Join(c.w.Close(), c.r.Close())
 }
 
 func (c *h2Conn) LocalAddr() net.Addr {
