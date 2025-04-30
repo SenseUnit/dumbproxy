@@ -2,7 +2,9 @@ package forward
 
 import (
 	"context"
+	"errors"
 	"io"
+	"time"
 
 	"github.com/zeebo/xxh3"
 	"golang.org/x/time/rate"
@@ -44,8 +46,29 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 	}
 	var n int64
 	for {
+		t := time.Now()
+		r := rl.ReserveN(t, copyChunkSize)
+		if !r.OK() {
+			err = errors.New("can't get rate limit reservation")
+			return
+		}
+		delay := r.DelayFrom(t)
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				err = ctx.Err()
+				return
+			}
+		}
 		n, err = io.Copy(dst, lim)
 		written += n
+		if n < copyChunkSize {
+			r.CancelAt(t)
+			if n > 0 {
+				rl.ReserveN(t, int(n))
+			}
+		}
 		if err != nil {
 			return
 		}
@@ -54,9 +77,6 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 			return
 		}
 		lim.N = copyChunkSize
-		if err = rl.WaitN(ctx, int(n)); err != nil {
-			return
-		}
 	}
 	return written, err
 }
