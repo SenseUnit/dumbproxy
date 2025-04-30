@@ -2,14 +2,13 @@ package forward
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/zeebo/xxh3"
 	"golang.org/x/time/rate"
 )
 
-const copyBufSize = 128 * 1024
+const copyChunkSize = 128 * 1024
 
 type BWLimit struct {
 	d []rate.Limiter
@@ -20,7 +19,7 @@ func NewBWLimit(bytesPerSecond float64, buckets uint, separate bool) *BWLimit {
 	if buckets == 0 {
 		buckets = 1
 	}
-	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), copyBufSize))
+	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), copyChunkSize))
 	d := make([]rate.Limiter, buckets)
 	for i := range d {
 		d[i] = lim
@@ -38,39 +37,25 @@ func NewBWLimit(bytesPerSecond float64, buckets uint, separate bool) *BWLimit {
 	}
 }
 
-var errInvalidWrite = errors.New("invalid write result")
-
 func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src io.Reader) (written int64, err error) {
-	buf := make([]byte, copyBufSize)
+	lim := &io.LimitedReader{
+		R: src,
+		N: copyChunkSize,
+	}
+	var n int64
 	for {
-		nr, er := src.Read(buf)
-		if nr > 0 {
-			if e := rl.WaitN(ctx, nr); e != nil {
-				err = e
-				break
-			}
-			nw, ew := dst.Write(buf[0:nr])
-			if nw < 0 || nr < nw {
-				nw = 0
-				if ew == nil {
-					ew = errInvalidWrite
-				}
-			}
-			written += int64(nw)
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
+		n, err = io.Copy(dst, lim)
+		written += n
+		if err != nil {
+			return
 		}
-		if er != nil {
-			if er != io.EOF {
-				err = er
-			}
-			break
+		if lim.N > 0 {
+			// EOF from underlying stream
+			return
+		}
+		lim.N = copyChunkSize
+		if err = rl.WaitN(ctx, int(n)); err != nil {
+			return
 		}
 	}
 	return written, err
