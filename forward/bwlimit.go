@@ -17,11 +17,11 @@ type BWLimit struct {
 	u []rate.Limiter
 }
 
-func NewBWLimit(bytesPerSecond float64, buckets uint, separate bool) *BWLimit {
+func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool) *BWLimit {
 	if buckets == 0 {
 		buckets = 1
 	}
-	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), copyChunkSize))
+	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), max(copyChunkSize, burst)))
 	d := make([]rate.Limiter, buckets)
 	for i := range d {
 		d[i] = lim
@@ -66,7 +66,7 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 		if n < copyChunkSize {
 			r.CancelAt(t)
 			if n > 0 {
-				rl.ReserveN(t, int(n))
+				rl.ReserveN(t, n)
 			}
 		}
 		if err != nil {

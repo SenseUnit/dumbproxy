@@ -206,6 +206,7 @@ type CLIArgs struct {
 	minTLSVersion             TLSVersionArg
 	maxTLSVersion             TLSVersionArg
 	bwLimit                   uint64
+	bwBurst                   int64
 	bwBuckets                 uint
 	bwSeparate                bool
 	dnsCacheTTL               time.Duration
@@ -300,6 +301,7 @@ func parse_args() CLIArgs {
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
+	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
 	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
@@ -467,6 +469,7 @@ func run() int {
 	if args.bwLimit != 0 {
 		forwarder = forward.NewBWLimit(
 			float64(args.bwLimit),
+			args.bwBurst,
 			args.bwBuckets,
 			args.bwSeparate,
 		).PairConnections
