@@ -66,7 +66,7 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 		if n < copyChunkSize {
 			r.CancelAt(t)
 			if n > 0 {
-				rl.ReserveN(t, int(n))
+				rl.ReserveN(t, n)
 			}
 		}
 		if err != nil {

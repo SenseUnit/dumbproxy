@@ -30,8 +30,10 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/pires/go-proxyproto v0.8.0
-	golang.org/x/sync v0.13.0 // indirect
+	golang.org/x/sync v0.13.0
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 )
+
+replace golang.org/x/time => github.com/Snawoot/xtime v0.0.0-20250501122004-d1ce456948bb
