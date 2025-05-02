@@ -95,7 +95,7 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 
 	if req.ProtoMajor == 0 || req.ProtoMajor == 1 {
 		// Upgrade client connection
-		localconn, _, err := hijack(wr)
+		localconn, rw, err := hijack(wr)
 		if err != nil {
 			s.logger.Error("Can't hijack client connection: %v", err)
 			http.Error(wr, "Can't hijack client connection", http.StatusInternalServerError)
@@ -105,6 +105,18 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 
 		// Inform client connection is built
 		fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
+
+		if buffered := rw.Reader.Buffered(); buffered > 0 {
+			s.logger.Debug("saving %d bytes buffered in bufio.ReadWriter", buffered)
+			s.forward(
+				req.Context(),
+				username,
+				wrapH1ReqBody(io.NopCloser(io.LimitReader(rw.Reader, int64(buffered)))),
+				wrapH1RespWriter(conn),
+			)
+		} else {
+			s.logger.Debug("not rescuing remaining data in bufio.ReadWriter")
+		}
 
 		s.forward(req.Context(), username, localconn, conn)
 	} else if req.ProtoMajor == 2 {
