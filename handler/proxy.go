@@ -74,13 +74,20 @@ type pendingWriteConn struct {
 	net.Conn
 	data []byte
 	done bool
+	wErr error
 }
 
 func (p *pendingWriteConn) Write(b []byte) (n int, err error) {
+	if p.wErr != nil {
+		return 0, p.wErr
+	}
 	if !p.done {
 		buf := append(append(make([]byte, 0, len(p.data)+len(b)), p.data...), b...)
 		n, err := p.Conn.Write(buf)
-		n = max(0, n - len(p.data))
+		if err != nil {
+			p.wErr = err
+		}
+		n = max(0, n-len(p.data))
 		p.done = true
 		p.data = nil
 		return n, err
