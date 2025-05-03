@@ -340,6 +340,8 @@ Supported proxy schemes are:
   * `curves` - colon-separated list of enabled TLS key exchange curves.
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
+* `http+optimistic` - (EXPERIMENTAL) HTTP proxy dialer which reads the connection success response asynchronously.
+* `https+optimistic` - (EXPERIMENTAL) HTTP proxy over TLS dialer which reads the connection success response asynchronously. Options are same as for `https` dialer.
 * `h2` - HTTP/2 proxy over TLS connection. Examples: `h2://user:password@example.org`, `h2://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
   * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
   * `sni` - override value of ServerName Indication extension.
