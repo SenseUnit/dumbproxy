@@ -62,3 +62,28 @@ func flush(flusher interface{}) bool {
 	f.Flush()
 	return true
 }
+
+func wrapPendingWrite(data []byte, c net.Conn) *pendingWriteConn {
+	return &pendingWriteConn{
+		data: data,
+		Conn: c,
+	}
+}
+
+type pendingWriteConn struct {
+	net.Conn
+	data []byte
+	done bool
+}
+
+func (p *pendingWriteConn) Write(b []byte) (n int, err error) {
+	if !p.done {
+		buf := append(append(make([]byte, 0, len(p.data)+len(b)), p.data...), b...)
+		n, err := p.Conn.Write(buf)
+		n = max(0, n - len(p.data))
+		p.done = true
+		p.data = nil
+		return n, err
+	}
+	return p.Conn.Write(b)
+}

@@ -103,9 +103,6 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 		}
 		defer localconn.Close()
 
-		// Inform client connection is built
-		fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
-
 		if buffered := rw.Reader.Buffered(); buffered > 0 {
 			s.logger.Debug("saving %d bytes buffered in bufio.ReadWriter", buffered)
 			s.forward(
@@ -114,11 +111,20 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 				wrapH1ReqBody(io.NopCloser(io.LimitReader(rw.Reader, int64(buffered)))),
 				wrapH1RespWriter(conn),
 			)
+			s.forward(
+				req.Context(),
+				username,
+				wrapPendingWrite(
+					[]byte(fmt.Sprintf("HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)),
+					localconn,
+				),
+				conn,
+			)
 		} else {
 			s.logger.Debug("not rescuing remaining data in bufio.ReadWriter")
+			fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
+			s.forward(req.Context(), username, localconn, conn)
 		}
-
-		s.forward(req.Context(), username, localconn, conn)
 	} else if req.ProtoMajor == 2 {
 		wr.Header()["Date"] = nil
 		wr.WriteHeader(http.StatusOK)
