@@ -15,6 +15,8 @@ import (
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
+
+	us "github.com/Snawoot/uniqueslice"
 )
 
 type serialNumberSetFile struct {
@@ -149,22 +151,20 @@ func formatSerial(serial *big.Int) string {
 	return string(buf[:len(buf)-1])
 }
 
-type serialNumberKey = [20]byte
+type serialNumberKey = us.Handle[[]byte, byte]
 type serialNumberSet struct {
 	sns map[serialNumberKey]struct{}
 }
 
-func normalizeSNBytes(b []byte) serialNumberKey {
-	var k serialNumberKey
-	copy(
-		k[max(len(k)-len(b), 0):],
-		b[max(len(b)-len(k), 0):],
-	)
-	return k
+func cutLeadingZeroes(b []byte) []byte {
+	for len(b) > 1 && b[0] == 0 {
+		b = b[1:]
+	}
+	return b
 }
 
 func (s *serialNumberSet) Has(serial *big.Int) bool {
-	key := normalizeSNBytes(serial.Bytes())
+	key := us.Make(cutLeadingZeroes(serial.Bytes()))
 	if s == nil || s.sns == nil {
 		return false
 	}
@@ -188,7 +188,7 @@ func newSerialNumberSetFromReader(r io.Reader, bad func(error)) (*serialNumberSe
 			}
 			continue
 		}
-		set[normalizeSNBytes(serial)] = struct{}{}
+		set[us.Make(cutLeadingZeroes(serial))] = struct{}{}
 	}
 
 	if err := scanner.Err(); err != nil {
