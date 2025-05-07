@@ -5,6 +5,7 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
+	github.com/Snawoot/uniqueslice v0.1.1
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/dop251/goja v0.0.0-20250309171923-bcd7cc6bf64c
 	github.com/hashicorp/go-multierror v1.1.1
@@ -14,11 +15,10 @@ require (
 	github.com/tg123/go-htpasswd v1.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20250406160420-959f8f3db0fb
 	golang.org/x/net v0.39.0
 	golang.org/x/time v0.11.0
 )
-
-require golang.org/x/crypto/x509roots/fallback v0.0.0-20250406160420-959f8f3db0fb
 
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
