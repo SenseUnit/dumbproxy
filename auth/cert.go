@@ -3,6 +3,7 @@ package auth
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -65,7 +66,7 @@ func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error)
 	return auth, nil
 }
 
-func (auth *CertAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *CertAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 || len(req.TLS.VerifiedChains[0]) < 1 {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 		return "", false

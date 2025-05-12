@@ -15,6 +15,7 @@ Simple, scriptable, secure forward proxy.
   * Via auto-reloaded NCSA httpd-style passwords file
   * Via static login and password
   * Via HMAC signatures provisioned by central authority (e.g. some webservice)
+  * Via Redis or Redis Cluster database
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
   * Supports client authentication with client TLS certificates
   * Native ACME support (can issue TLS certificates automatically using Let's Encrypt or BuyPass)
@@ -226,14 +227,22 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `hidden_domain` - if specified and is not an empty string, proxy will respond with "407 Proxy Authentication Required" only on specified domain. All unauthenticated clients will receive "400 Bad Request" status. This option is useful to prevent DPI active probing from discovering that service is a proxy, hiding proxy authentication prompt when no valid auth header was provided. Hidden domain is used for generating 407 response code to trigger browser authorization request in cases when browser has no prior knowledge proxy authentication is required. In such cases user has to navigate to any hidden domain page via plaintext HTTP, authenticate themselves and then browser will remember authentication.
 * `basicfile` - use htpasswd-like file with login and password pairs for authentication. Such file can be created/updated with command like this: `dumbproxy -passwd /etc/dumbproxy.htpasswd username password` or with `htpasswd` utility from Apache HTTPD utils. `path` parameter in URL for this provider must point to a local file with login and bcrypt-hashed password lines. Example: `basicfile://?path=/etc/dumbproxy.htpasswd`. Parameters:
   * `path` - location of file with login and password pairs. File format is similar to htpasswd files. Each line must be in form `<username>:<bcrypt hash of password>`. Empty lines and lines starting with `#` are ignored.
-  * `hidden_domain` - same as in `static` provider
+  * `hidden_domain` - same as in `static` provider.
   * `reload` - interval for conditional password file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
 * `hmac` - authentication with HMAC-signatures passed as username and password via basic authentication scheme. In that scheme username represents user login as usual and password should be constructed as follows: *password := urlsafe\_base64\_without\_padding(expire\_timestamp || hmac\_sha256(secret, "dumbproxy grant token v1" || username || expire\_timestamp))*, where *expire_timestamp* is 64-bit big-endian UNIX timestamp and *||* is a concatenation operator. [This Python script](https://gist.github.com/Snawoot/2b5acc232680d830f0f308f14e540f1d) can be used as a reference implementation of signing. Dumbproxy itself also provides built-in signer: `dumbproxy -hmac-sign <HMAC key> <username> <validity duration>`. Parameters of this auth scheme are:
   * `secret` - hex-encoded HMAC secret key. Alternatively it can be specified by `DUMBPROXY_HMAC_SECRET` environment variable. Secret key can be generated with command like this: `openssl rand -hex 32` or `dumbproxy -hmac-genkey`.
-  * `hidden_domain` - same as in `static` provider
+  * `hidden_domain` - same as in `static` provider.
 * `cert` - use mutual TLS authentication with client certificates. In order to use this auth provider server must listen sockert in TLS mode (`-cert` and `-key` options) and client CA file must be specified (`-cacert`). Example: `cert://`. Parameters of this scheme are:
   * `blacklist` - location of file with list of serial numbers of blocked certificates, one per each line in form of hex-encoded colon-separated bytes. Example: `ab:01:02:03`. Empty lines and comments starting with `#` are ignored.
   * `reload` - interval for certificate blacklist file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
+* `redis` - use external Redis database to lookup password verifiers for users. The password format is similar to `basicfile` mode or `htpasswd` encoding except username goes into Redis key name, colon is skipped and the rest goes to value of this key. For example, login-password pair `test` / `123456` can be encoded as Redis key `test` with value `$2y$05$zs1EJayCIyYtG.NQVzu9SeNvMP0XYWa42fQv.XNDx33wwbg98SnUq`. Example of auth parameter: `-auth 'redis://?url=redis%3A//default%3A123456Y%40redis-14623.c531.europe-west3-1.gce.redns.redis-cloud.com%3A17954/0&key_prefix=auth_'`. Parameters:
+  * `url` - URL specifying Redis instance to connect to. See [ParseURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseURL) documentation for the complete specification of Redis URL format.
+  * `key_prefix' - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
+  * `hidden\_domain` - same as in `static provider.
+* `redis-cluster` - same as Redis, but uses Redis Cluster client instead.
+  * `url` - URL specifying Redis instance to connect to. See [ParseClusterURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseClusterURL) documentation for the complete specification of Redis URL format.
+  * `key_prefix' - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
+  * `hidden\_domain` - same as in `static provider.
 
 ## Scripting
 
