@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -83,7 +84,7 @@ func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 	return hmac.Equal(token.Signature[:], expectedMAC)
 }
 
-func (auth *HMACAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *HMACAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
 		requireBasicAuth(wr, req, auth.hiddenDomain)

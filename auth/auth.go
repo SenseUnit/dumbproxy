@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -10,7 +11,7 @@ import (
 )
 
 type Auth interface {
-	Validate(wr http.ResponseWriter, req *http.Request) (string, bool)
+	Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool)
 	Stop()
 }
 
@@ -29,6 +30,10 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 		return NewHMACAuth(url, logger)
 	case "cert":
 		return NewCertAuth(url, logger)
+	case "redis":
+		return NewRedisAuth(url, false, logger)
+	case "redis-cluster":
+		return NewRedisAuth(url, true, logger)
 	case "none":
 		return NoAuth{}, nil
 	default:

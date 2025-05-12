@@ -192,7 +192,8 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	username, ok := s.auth.Validate(wr, req)
+	ctx := req.Context()
+	username, ok := s.auth.Validate(ctx, wr, req)
 	localAddr := getLocalAddr(req.Context())
 	s.logger.Info("Request: %v => %v %q %v %v %v", req.RemoteAddr, localAddr, username, req.Proto, req.Method, req.URL)
 
@@ -208,7 +209,6 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 			ipHints = &hintValues[0]
 		}
 	}
-	ctx := req.Context()
 	ctx = ddto.BoundDialerParamsToContext(ctx, ipHints, trimAddrPort(localAddr))
 	ctx = ddto.FilterParamsToContext(ctx, req, username)
 	req = req.WithContext(ctx)

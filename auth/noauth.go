@@ -1,10 +1,13 @@
 package auth
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 type NoAuth struct{}
 
-func (_ NoAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (_ NoAuth) Validate(_ context.Context, _ http.ResponseWriter, _ *http.Request) (string, bool) {
 	return "", true
 }
 

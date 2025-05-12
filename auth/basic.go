@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -114,7 +115,7 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 	}
 }
 
-func (auth *BasicAuth) Validate(wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *BasicAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
 		requireBasicAuth(wr, req, auth.hiddenDomain)
