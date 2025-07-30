@@ -131,6 +131,22 @@ stream
 }
 ```
 
+### Example: HTTP proxy over TLS (ACME-issued cert) behind Traefik reverse proxy running in Docker Compose and performing SNI routing
+
+Have following labels attached to dumbproxy service in compose file:
+
+```yaml
+        traefik.enable: "true"
+        traefik.tcp.routers.dumbproxy.service: dumbproxy
+        traefik.tcp.routers.dumbproxy.rule: HostSNI(`<your-domain>`)
+        traefik.tcp.routers.dumbproxy.tls: "true"
+        traefik.tcp.routers.dumbproxy.tls.passthrough: "false"
+        traefik.tcp.services.dumbproxy.loadBalancer.server.port: 8080
+        traefik.tcp.services.dumbproxy.loadbalancer.proxyProtocol.version: 2
+```
+
+dumbproxy service should be run in plaintext mode as TLS is handled on Traefik side. So options would be just `-bind-address=:8080 -proxyproto` and probably something for authorization. This recipe is explained in [Wiki](https://github.com/SenseUnit/dumbproxy/wiki/Docker-Compose-Deployment-behind-Traefik-Reverse-Proxy) with more details and configuration files provided for context.
+
 ### Example: HTTP proxy over TLS (BuyPass automatic certs)
 
 Run HTTPS proxy (HTTP proxy over TLS) with automatic certs from BuyPass on port 443 with `Basic` authentication with username `admin` and password `123456`:
@@ -144,6 +160,8 @@ dumbproxy \
 	-autocert-email YOUR-EMAIL@EXAMPLE.ORG \
 	-autocert-http :80
 ```
+
+See [Wiki](https://github.com/SenseUnit/dumbproxy/wiki) for more examples, recipes and notes.
 
 ## Using HTTP-over-TLS proxy
 
