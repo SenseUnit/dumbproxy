@@ -141,6 +141,7 @@ Have following labels attached to dumbproxy service in compose file:
         traefik.tcp.routers.dumbproxy.rule: HostSNI(`<your-domain>`)
         traefik.tcp.routers.dumbproxy.tls: "true"
         traefik.tcp.routers.dumbproxy.tls.passthrough: "false"
+        traefik.tcp.routers.dumbproxy.tls.certResolver: letsencrypt
         traefik.tcp.services.dumbproxy.loadBalancer.server.port: 8080
         traefik.tcp.services.dumbproxy.loadbalancer.proxyProtocol.version: 2
 ```
