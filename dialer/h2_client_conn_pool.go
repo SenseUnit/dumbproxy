@@ -29,6 +29,7 @@ type clientConnPool struct {
 	dialing      map[string]*dialCall           // currently in-flight dials
 	keys         map[*http2.ClientConn][]string
 	addConnCalls map[string]*addConnCall // in-flight addConnIfNeeded calls
+	prepare      func(context.Context, *http2.ClientConn) (*http2.ClientConn, error)
 }
 
 func (p *clientConnPool) GetClientConn(req *http.Request, addr string) (*http2.ClientConn, error) {
@@ -78,7 +79,14 @@ func (p *clientConnPool) dialClientConn(ctx context.Context, addr string) (*http
 	if err != nil {
 		return nil, err
 	}
-	return p.t.NewClientConn(tconn)
+	cc, err := p.t.NewClientConn(tconn)
+	if err != nil {
+		return nil, err
+	}
+	if p.prepare != nil {
+		return p.prepare(ctx, cc)
+	}
+	return cc, nil
 }
 
 func (p *clientConnPool) dialTLS(ctx context.Context, network, addr string, tlsCfg *tls.Config) (net.Conn, error) {

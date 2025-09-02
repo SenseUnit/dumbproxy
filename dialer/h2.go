@@ -61,6 +61,12 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		AllowHTTP:       h2c,
 		TLSClientConfig: tlsConfig,
 	}
+	t.ConnPool = &clientConnPool{
+		t: t,
+		prepare: func(ctx context.Context, c *http2.ClientConn) (*http2.ClientConn, error) {
+			return c, nil
+		},
+	}
 	nextDialer := MaybeWrapWithContextDialer(next)
 	if h2c {
 		t.DialTLSContext = func(ctx context.Context, network, _ string, _ *tls.Config) (net.Conn, error) {
