@@ -2,9 +2,13 @@ package dialer
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
 
 	xproxy "golang.org/x/net/proxy"
 )
@@ -75,4 +79,52 @@ func MaybeWrapWithContextDialer(d LegacyDialer) Dialer {
 		return xd
 	}
 	return wrappedDialer{d}
+}
+
+func garbageLenFuncFromURL(u *url.URL, paramname string) (func() int, error) {
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("garbage len param parse failed: %w", err)
+	}
+	if !params.Has(paramname) {
+		return nil, nil
+	}
+	left, right, found := strings.Cut(params.Get(paramname), "-")
+	if found {
+		lo, err := strconv.Atoi(left)
+		if err != nil {
+			return nil, fmt.Errorf("can't convert lower boundary for garbage length %q to int: %w", left, err)
+		}
+		if lo < 0 {
+			return nil, errors.New("negative lower boundary for garbage length is not allowed")
+		}
+		hi, err := strconv.Atoi(right)
+		if err != nil {
+			return nil, fmt.Errorf("can't convert upper boundary for garbage length %q to int: %w", right, err)
+		}
+		if hi < 0 {
+			return nil, errors.New("negative upper boundary for garbage length is not allowed")
+		}
+		if hi < lo {
+			hi, lo = lo, hi
+		}
+		if hi == lo {
+			return func() int {
+				return lo
+			}, nil
+		}
+		return func() int {
+			return lo + rand.IntN(hi-lo)
+		}, nil
+	}
+	l, err := strconv.Atoi(left)
+	if err != nil {
+		return nil, fmt.Errorf("can't convert garbage length %q to int: %w", left, err)
+	}
+	if l < 0 {
+		return nil, errors.New("negative garbage length is not allowed")
+	}
+	return func() int {
+		return l
+	}, nil
 }

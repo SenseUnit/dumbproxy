@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		tlsConfig *tls.Config
 		err       error
 		h2c       bool
+		scheme    string
 	)
 	switch strings.ToLower(u.Scheme) {
 	case "h2c":
@@ -41,6 +43,7 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 			port = "80"
 		}
 		h2c = true
+		scheme = "http"
 	case "h2":
 		if port == "" {
 			port = "443"
@@ -52,11 +55,16 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
 		}
+		scheme = "https"
 	default:
 		return nil, errors.New("unsupported proxy type")
 	}
 
 	address := net.JoinHostPort(host, port)
+	garbageLenFunc, err := garbageLenFuncFromURL(u, "fetchrandom")
+	if err != nil {
+		return nil, err
+	}
 	t := &http2.Transport{
 		AllowHTTP:       h2c,
 		TLSClientConfig: tlsConfig,
@@ -64,6 +72,36 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 	t.ConnPool = &clientConnPool{
 		t: t,
 		prepare: func(ctx context.Context, c *http2.ClientConn) (*http2.ClientConn, error) {
+			if garbageLenFunc == nil {
+				return c, nil
+			}
+			garbageLen := garbageLenFunc()
+			req := (&http.Request{
+				Method: "GETRANDOM",
+				URL: &url.URL{
+					Scheme: scheme,
+					Host:   u.Host,
+					Path:   "/" + strconv.Itoa(garbageLen),
+				},
+				Header: http.Header{
+					"User-Agent": []string{"dumbproxy"},
+				},
+				Host: u.Host,
+			}).WithContext(ctx)
+			if u.User != nil {
+				req.Header.Set("Proxy-Authorization", basicAuthHeader(u.User))
+			}
+			if !c.ReserveNewRequest() {
+				return nil, fmt.Errorf("unable to reserve garbage fetch request")
+			}
+			resp, err := c.RoundTrip(req)
+			if err != nil {
+				return nil, fmt.Errorf("garbage fetch request failed: %w", err)
+			}
+			defer resp.Body.Close()
+			if _, err = io.Copy(io.Discard, io.LimitReader(resp.Body, int64(garbageLen))); err != nil {
+				return nil, fmt.Errorf("garbage body fetch failed: %w", err)
+			}
 			return c, nil
 		},
 	}
