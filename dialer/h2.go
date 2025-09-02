@@ -99,8 +99,12 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 				return nil, fmt.Errorf("garbage fetch request failed: %w", err)
 			}
 			defer resp.Body.Close()
-			if _, err = io.Copy(io.Discard, io.LimitReader(resp.Body, int64(garbageLen))); err != nil {
+			n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, int64(garbageLen)))
+			if err != nil {
 				return nil, fmt.Errorf("garbage body fetch failed: %w", err)
+			}
+			if n < int64(garbageLen) {
+				return nil, errors.New("incomplete garbage read")
 			}
 			return c, nil
 		},
