@@ -368,6 +368,7 @@ Supported proxy schemes are:
   * `curves` - colon-separated list of enabled TLS key exchange curves.
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
+  * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
 * `http+optimistic` - (EXPERIMENTAL) HTTP proxy dialer which reads the connection success response asynchronously.
 * `https+optimistic` - (EXPERIMENTAL) HTTP proxy over TLS dialer which reads the connection success response asynchronously. Options are same as for `https` dialer.
 * `h2` - HTTP/2 proxy over TLS connection. Examples: `h2://user:password@example.org`, `h2://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
@@ -381,6 +382,7 @@ Supported proxy schemes are:
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
   * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
+  * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
 * `h2c` - HTTP/2 proxy over plaintext connection with the CONNECT method support. Examples: `h2c://example.org:8080`.
   * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
