@@ -17,10 +17,11 @@ import (
 )
 
 type OptimisticHTTPProxyDialer struct {
-	address   string
-	tlsConfig *tls.Config
-	userinfo  *url.Userinfo
-	next      Dialer
+	address    string
+	tlsConfig  *tls.Config
+	tlsFactory func(net.Conn, *tls.Config) net.Conn
+	userinfo   *url.Userinfo
+	next       Dialer
 }
 
 func NewOptimisticHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Userinfo, next LegacyDialer) *OptimisticHTTPProxyDialer {
@@ -36,8 +37,11 @@ func OptimisticHTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Di
 	host := u.Hostname()
 	port := u.Port()
 
-	var tlsConfig *tls.Config
-	var err error
+	var (
+		tlsConfig  *tls.Config
+		tlsFactory func(net.Conn, *tls.Config) net.Conn
+		err        error
+	)
 	switch strings.ToLower(u.Scheme) {
 	case "http+optimistic":
 		if port == "" {
@@ -51,13 +55,23 @@ func OptimisticHTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Di
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
 		}
+		tlsFactory, err = tlsutil.TLSFactoryFromURL(u)
+		if err != nil {
+			return nil, fmt.Errorf("TLS configuration failed: %w", err)
+		}
 	default:
 		return nil, errors.New("unsupported proxy type")
 	}
 
 	address := net.JoinHostPort(host, port)
 
-	return NewOptimisticHTTPProxyDialer(address, tlsConfig, u.User, next), nil
+	return &OptimisticHTTPProxyDialer{
+		address:    address,
+		tlsConfig:  tlsConfig,
+		tlsFactory: tlsFactory,
+		userinfo:   u.User,
+		next:       MaybeWrapWithContextDialer(next),
+	}, nil
 }
 
 func (d *OptimisticHTTPProxyDialer) Dial(network, address string) (net.Conn, error) {
@@ -75,7 +89,7 @@ func (d *OptimisticHTTPProxyDialer) DialContext(ctx context.Context, network, ad
 		return nil, fmt.Errorf("proxy dialer is unable to make connection: %w", err)
 	}
 	if d.tlsConfig != nil {
-		conn = tls.Client(conn, d.tlsConfig)
+		conn = d.tlsFactory(conn, d.tlsConfig)
 	}
 
 	return &futureH1ProxiedConn{

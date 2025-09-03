@@ -32,10 +32,11 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 	port := u.Port()
 
 	var (
-		tlsConfig *tls.Config
-		err       error
-		h2c       bool
-		scheme    string
+		tlsConfig  *tls.Config
+		tlsFactory func(net.Conn, *tls.Config) net.Conn
+		err        error
+		h2c        bool
+		scheme     string
 	)
 	switch strings.ToLower(u.Scheme) {
 	case "h2c":
@@ -52,6 +53,10 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		if !slices.Contains(tlsConfig.NextProtos, "h2") {
 			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
 		}
+		if err != nil {
+			return nil, fmt.Errorf("TLS configuration failed: %w", err)
+		}
+		tlsFactory, err = tlsutil.TLSFactoryFromURL(u)
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
 		}
@@ -120,7 +125,7 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 			if err != nil {
 				return nil, err
 			}
-			conn = tls.Client(conn, tlsConfig)
+			conn = tlsFactory(conn, tlsConfig)
 			return conn, nil
 		}
 	}

@@ -21,10 +21,11 @@ import (
 )
 
 type HTTPProxyDialer struct {
-	address   string
-	tlsConfig *tls.Config
-	userinfo  *url.Userinfo
-	next      Dialer
+	address    string
+	tlsConfig  *tls.Config
+	tlsFactory func(net.Conn, *tls.Config) net.Conn
+	userinfo   *url.Userinfo
+	next       Dialer
 }
 
 func NewHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Userinfo, next LegacyDialer) *HTTPProxyDialer {
@@ -40,8 +41,11 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 	host := u.Hostname()
 	port := u.Port()
 
-	var tlsConfig *tls.Config
-	var err error
+	var (
+		tlsConfig  *tls.Config
+		tlsFactory func(net.Conn, *tls.Config) net.Conn
+		err        error
+	)
 	switch strings.ToLower(u.Scheme) {
 	case "http":
 		if port == "" {
@@ -55,13 +59,23 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
 		}
+		tlsFactory, err = tlsutil.TLSFactoryFromURL(u)
+		if err != nil {
+			return nil, fmt.Errorf("TLS configuration failed: %w", err)
+		}
 	default:
 		return nil, errors.New("unsupported proxy type")
 	}
 
 	address := net.JoinHostPort(host, port)
 
-	return NewHTTPProxyDialer(address, tlsConfig, u.User, next), nil
+	return &HTTPProxyDialer{
+		address:    address,
+		tlsConfig:  tlsConfig,
+		tlsFactory: tlsFactory,
+		next:       MaybeWrapWithContextDialer(next),
+		userinfo:   u.User,
+	}, nil
 }
 
 func (d *HTTPProxyDialer) Dial(network, address string) (net.Conn, error) {
@@ -79,7 +93,7 @@ func (d *HTTPProxyDialer) DialContext(ctx context.Context, network, address stri
 		return nil, fmt.Errorf("proxy dialer is unable to make connection: %w", err)
 	}
 	if d.tlsConfig != nil {
-		conn = tls.Client(conn, d.tlsConfig)
+		conn = d.tlsFactory(conn, d.tlsConfig)
 	}
 
 	stopGuardEvent := make(chan struct{})
