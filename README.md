@@ -28,6 +28,8 @@ Simple, scriptable, secure forward proxy.
 * Optional DNS cache
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
+  * Optional parroting of TLS fingerprints of popular software such as web browsers.
+  * Optional countermeasures against TLS-in-TLS detection (available when both client and server are dumbproxy).
 * systemd socket activation
 * [Proxy protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) support for working behind a reverse proxy (HAProxy, Nginx)
 * Scripting with JavaScript:
