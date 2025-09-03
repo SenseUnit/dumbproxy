@@ -2,12 +2,15 @@ package handler
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -170,6 +173,25 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	s.forward(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
 }
 
+func (s *ProxyHandler) HandleGetRandom(wr http.ResponseWriter, req *http.Request, username string) {
+	if len(req.URL.Path) <= 1 || req.URL.Path[0] != '/' {
+		http.Error(wr, "Incorrect requested random data length", http.StatusBadRequest)
+	}
+	length, err := strconv.ParseInt(req.URL.Path[1:], 10, 64)
+	if err != nil || length < 0 {
+		http.Error(wr, "Incorrect requested random data length", http.StatusBadRequest)
+	}
+	var seed [32]byte
+	binary.NativeEndian.PutUint64(seed[0:], rand.Uint64())
+	binary.NativeEndian.PutUint64(seed[8:], rand.Uint64())
+	binary.NativeEndian.PutUint64(seed[16:], rand.Uint64())
+	binary.NativeEndian.PutUint64(seed[24:], rand.Uint64())
+	rng := rand.NewChaCha8(seed)
+	wr.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+	wr.WriteHeader(http.StatusOK)
+	io.Copy(wr, io.LimitReader(rng, length))
+}
+
 func (s *ProxyHandler) isLoopback(req *http.Request) (string, bool) {
 	s.outboundMux.RLock()
 	originator, found := s.outbound[req.RemoteAddr]
@@ -185,8 +207,8 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	isConnect := strings.ToUpper(req.Method) == "CONNECT"
-	if (req.URL.Host == "" || req.URL.Scheme == "" && !isConnect) && req.ProtoMajor < 2 ||
+	method := strings.ToUpper(req.Method)
+	if (req.URL.Host == "" || req.URL.Scheme == "" && method != "CONNECT") && req.ProtoMajor < 2 ||
 		req.Host == "" && req.ProtoMajor == 2 {
 		http.Error(wr, auth.BAD_REQ_MSG, http.StatusBadRequest)
 		return
@@ -213,9 +235,12 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	ctx = ddto.FilterParamsToContext(ctx, req, username)
 	req = req.WithContext(ctx)
 	delHopHeaders(req.Header)
-	if isConnect {
+	switch method {
+	case "CONNECT":
 		s.HandleTunnel(wr, req, username)
-	} else {
+	case "GETRANDOM":
+		s.HandleGetRandom(wr, req, username)
+	default:
 		s.HandleRequest(wr, req, username)
 	}
 }

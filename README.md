@@ -380,7 +380,9 @@ Supported proxy schemes are:
   * `curves` - colon-separated list of enabled TLS key exchange curves.
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
+  * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
 * `h2c` - HTTP/2 proxy over plaintext connection with the CONNECT method support. Examples: `h2c://example.org:8080`.
+  * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 * `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
