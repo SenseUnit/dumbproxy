@@ -258,11 +258,11 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `reload` - interval for certificate blacklist file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
 * `redis` - use external Redis database to lookup password verifiers for users. The password format is similar to `basicfile` mode or `htpasswd` encoding except username goes into Redis key name, colon is skipped and the rest goes to value of this key. For example, login-password pair `test` / `123456` can be encoded as Redis key `test` with value `$2y$05$zs1EJayCIyYtG.NQVzu9SeNvMP0XYWa42fQv.XNDx33wwbg98SnUq`. Example of auth parameter: `-auth 'redis://?url=redis%3A//default%3A123456Y%40redis-14623.c531.europe-west3-1.gce.redns.redis-cloud.com%3A17954/0&key_prefix=auth_'`. Parameters:
   * `url` - URL specifying Redis instance to connect to. See [ParseURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseURL) documentation for the complete specification of Redis URL format.
-  * `key_prefix' - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
+  * `key_prefix` - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
   * `hidden\_domain` - same as in `static provider.
 * `redis-cluster` - same as Redis, but uses Redis Cluster client instead.
   * `url` - URL specifying Redis instance to connect to. See [ParseClusterURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseClusterURL) documentation for the complete specification of Redis URL format.
-  * `key_prefix' - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
+  * `key_prefix` - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
   * `hidden\_domain` - same as in `static provider.
 
 ## Scripting
