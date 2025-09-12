@@ -455,12 +455,16 @@ Usage of /home/user/go/bin/dumbproxy:
     	enables in-memory cache for certificates
   -autocert-whitelist value
     	restrict autocert domains to this comma-separated list
-  -bind-address string
+  -bind-address value
     	HTTP proxy listen address. Set empty value to use systemd socket activation. (default ":8080")
-  -bind-pprof string
+  -bind-pprof value
     	enables pprof debug endpoints
+  -bind-pprof-unix-socket value
+    	enables pprof debug endpoints listening on Unix domain socket
   -bind-reuseport
     	allow multiple server instances on the same port
+  -bind-unix-socket value
+    	Unix domain socket to listen to, overrides bind-address if set.
   -bw-limit uint
     	per-user bandwidth limit in bytes per second
   -bw-limit-buckets uint
@@ -523,6 +527,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	listen proxy protocol
   -req-header-timeout duration
     	amount of time allowed to read request headers (default 30s)
+  -shutdown-timeout duration
+    	grace period during server shutdown (default 1s)
   -user-ip-hints
     	allow IP hints to be specified by user in X-Src-IP-Hints header
   -verbosity int
