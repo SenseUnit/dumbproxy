@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
@@ -369,8 +370,12 @@ func run() int {
 	}
 
 	// setup logging
-	logWriter := clog.NewLogWriter(os.Stderr)
-	defer logWriter.Close()
+	logWriter := clog.NewLogWriter(os.Stderr, 128)
+	defer func() {
+		ctx, cl := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cl()
+		logWriter.Close(ctx)
+	}()
 
 	mainLogger := clog.NewCondLogger(log.New(logWriter, "MAIN    : ",
 		log.LstdFlags|log.Lshortfile),
