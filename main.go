@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -160,6 +162,25 @@ func (a *hexArg) Value() []byte {
 	return a.value
 }
 
+type modeArg fs.FileMode
+
+func (a *modeArg) String() string {
+	return fmt.Sprintf("%#o", uint32(*a))
+}
+
+func (a *modeArg) Set(s string) error {
+	p, err := strconv.ParseUint(s, 8, 32)
+	if err != nil {
+		return err
+	}
+	*a = modeArg(p)
+	return nil
+}
+
+func (a *modeArg) Value() fs.FileMode {
+	return fs.FileMode(*a)
+}
+
 type cacheKind int
 
 const (
@@ -184,6 +205,8 @@ type CLIArgs struct {
 	bind                      bindSpec
 	bindReusePort             bool
 	bindPprof                 bindSpec
+	unixSockUnlink            bool
+	unixSockMode              modeArg
 	auth                      string
 	verbosity                 int
 	cert, key, cafile         string
@@ -275,6 +298,8 @@ func parse_args() CLIArgs {
 		args.bindPprof.af = "unix"
 		return nil
 	})
+	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
+	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -550,6 +575,26 @@ func run() int {
 		} else {
 			mainLogger.Warning("reuseport was requested but not available!")
 		}
+	}
+	if args.unixSockUnlink {
+		listenerFactory = func(orig func(string, string) (net.Listener, error)) func(string, string) (net.Listener, error) {
+			return func(network, address string) (net.Listener, error) {
+				if (network == "unix" || network == "unixdgram") && len(address) > 0 && address[0] != '@' {
+					os.Remove(address)
+				}
+				return orig(network, address)
+			}
+		}(listenerFactory)
+	}
+	if args.unixSockMode != 0 {
+		listenerFactory = func(orig func(string, string) (net.Listener, error)) func(string, string) (net.Listener, error) {
+			return func(network, address string) (net.Listener, error) {
+				if (network == "unix" || network == "unixdgram") && len(address) > 0 && address[0] != '@' {
+					defer os.Chmod(address, args.unixSockMode.Value())
+				}
+				return orig(network, address)
+			}
+		}(listenerFactory)
 	}
 
 	var listener net.Listener
