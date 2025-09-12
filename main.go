@@ -626,6 +626,8 @@ func run() int {
 		}
 		listener = tls.NewListener(listener, cfg)
 	}
+	defer listener.Close()
+
 	// debug endpoints setup
 	if args.bindPprof != "" {
 		mux := http.NewServeMux()
