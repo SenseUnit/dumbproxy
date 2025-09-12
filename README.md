@@ -529,6 +529,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	amount of time allowed to read request headers (default 30s)
   -shutdown-timeout duration
     	grace period during server shutdown (default 1s)
+  -unix-sock-mode value
+    	set file mode for bound unix socket
+  -unix-sock-unlink
+    	delete file object located at Unix domain socket bind path before binding (default true)
   -user-ip-hints
     	allow IP hints to be specified by user in X-Src-IP-Hints header
   -verbosity int
