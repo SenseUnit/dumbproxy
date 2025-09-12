@@ -19,9 +19,11 @@ import (
 	"net/http/pprof"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
@@ -219,6 +221,7 @@ type CLIArgs struct {
 	jsAccessFilterInstances   int
 	jsProxyRouterInstances    int
 	proxyproto                bool
+	shutdownTimeout           time.Duration
 }
 
 func parse_args() CLIArgs {
@@ -318,6 +321,7 @@ func parse_args() CLIArgs {
 		return nil
 	})
 	flag.BoolVar(&args.proxyproto, "proxyproto", false, "listen proxy protocol")
+	flag.DurationVar(&args.shutdownTimeout, "shutdown-timeout", 1*time.Second, "grace period during server shutdown")
 	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
 	args.positionalArgs = flag.Args()
@@ -480,6 +484,7 @@ func run() int {
 		).PairConnections
 	}
 
+	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	server := http.Server{
 		Addr: args.bindAddress,
 		Handler: handler.NewProxyHandler(&handler.Config{
@@ -495,6 +500,9 @@ func run() int {
 		WriteTimeout:      0,
 		IdleTimeout:       0,
 		Protocols:         new(http.Protocols),
+		BaseContext: func(_ net.Listener) context.Context {
+			return stopContext
+		},
 	}
 
 	// listener setup
@@ -631,10 +639,25 @@ func run() int {
 
 	mainLogger.Info("Proxy server started.")
 
+	shutdownComplete := make(chan struct{})
+
+	go func() {
+		<-stopContext.Done()
+		mainLogger.Info("Shutting down...")
+		shutdownContext, cl := context.WithTimeout(context.Background(), args.shutdownTimeout)
+		defer cl()
+		server.Shutdown(shutdownContext)
+		close(shutdownComplete)
+	}()
+
 	// setup done
-	err = server.Serve(listener)
-	mainLogger.Critical("Server terminated with a reason: %v", err)
-	mainLogger.Info("Shutting down...")
+	if err := server.Serve(listener); err == http.ErrServerClosed {
+		// need to wait shutdown to exit
+		<-shutdownComplete
+		mainLogger.Info("Reached normal server termination.")
+	} else {
+		mainLogger.Critical("Server terminated with a reason: %v", err)
+	}
 	return 0
 }
 
