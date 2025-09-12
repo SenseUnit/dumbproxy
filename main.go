@@ -177,6 +177,7 @@ const envCacheEncKey = "DUMBPROXY_CACHE_ENC_KEY"
 
 type CLIArgs struct {
 	bindAddress               string
+	bindUnixSocket            string
 	bindReusePort             bool
 	bindPprof                 string
 	auth                      string
@@ -245,7 +246,16 @@ func parse_args() CLIArgs {
 		},
 	}
 	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
-	flag.StringVar(&args.bindAddress, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
+	flag.Func("bind-address", "HTTP proxy listen address. Set empty value to use systemd socket activation.", func(p string) error {
+		args.bindAddress = p
+		args.bindUnixSocket = ""
+		return nil
+	})
+	flag.Func("bind-unix-socket", "Unix domain socket to listen to, overrides bind-address if set.", func(p string) error {
+		args.bindAddress = ""
+		args.bindUnixSocket = p
+		return nil
+	})
 	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
 	flag.StringVar(&args.bindPprof, "bind-pprof", "", "enables pprof debug endpoints")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
@@ -517,7 +527,16 @@ func run() int {
 
 	mainLogger.Info("Starting proxy server...")
 	var listener net.Listener
-	if args.bindAddress == "" {
+	if args.bindUnixSocket != "" {
+		newListener, err := net.Listen("unix", args.bindUnixSocket)
+
+		if err != nil {
+			mainLogger.Critical("listen failed: %v", err)
+			return 3
+		}
+
+		listener = newListener
+	} else if args.bindAddress == "" {
 		// socket activation
 		listeners, err := activation.Listeners()
 		if err != nil {
