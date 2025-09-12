@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -160,6 +162,25 @@ func (a *hexArg) Value() []byte {
 	return a.value
 }
 
+type modeArg fs.FileMode
+
+func (a *modeArg) String() string {
+	return fmt.Sprintf("%#o", uint32(*a))
+}
+
+func (a *modeArg) Set(s string) error {
+	p, err := strconv.ParseUint(s, 8, 32)
+	if err != nil {
+		return err
+	}
+	*a = modeArg(p)
+	return nil
+}
+
+func (a *modeArg) Value() fs.FileMode {
+	return fs.FileMode(*a)
+}
+
 type cacheKind int
 
 const (
@@ -175,11 +196,17 @@ type autocertCache struct {
 
 const envCacheEncKey = "DUMBPROXY_CACHE_ENC_KEY"
 
+type bindSpec struct {
+	af      string
+	address string
+}
+
 type CLIArgs struct {
-	bindAddress               string
-	bindUnixSocket            string
+	bind                      bindSpec
 	bindReusePort             bool
-	bindPprof                 string
+	bindPprof                 bindSpec
+	unixSockUnlink            bool
+	unixSockMode              modeArg
 	auth                      string
 	verbosity                 int
 	cert, key, cafile         string
@@ -244,20 +271,35 @@ func parse_args() CLIArgs {
 			kind:  cacheKindDir,
 			value: filepath.Join(home, ".dumbproxy", "autocert"),
 		},
+		bind: bindSpec{
+			address: ":8080",
+			af:      "tcp",
+		},
 	}
 	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
-	flag.Func("bind-address", "HTTP proxy listen address. Set empty value to use systemd socket activation.", func(p string) error {
-		args.bindAddress = p
-		args.bindUnixSocket = ""
+	flag.Func("bind-address", "HTTP proxy listen address. Set empty value to use systemd socket activation. (default \":8080\")", func(p string) error {
+		args.bind.address = p
+		args.bind.af = "tcp"
 		return nil
 	})
 	flag.Func("bind-unix-socket", "Unix domain socket to listen to, overrides bind-address if set.", func(p string) error {
-		args.bindAddress = ""
-		args.bindUnixSocket = p
+		args.bind.address = p
+		args.bind.af = "unix"
 		return nil
 	})
 	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
-	flag.StringVar(&args.bindPprof, "bind-pprof", "", "enables pprof debug endpoints")
+	flag.Func("bind-pprof", "enables pprof debug endpoints", func(p string) error {
+		args.bindPprof.address = p
+		args.bindPprof.af = "tcp"
+		return nil
+	})
+	flag.Func("bind-pprof-unix-socket", "enables pprof debug endpoints listening on Unix domain socket", func(p string) error {
+		args.bindPprof.address = p
+		args.bindPprof.af = "unix"
+		return nil
+	})
+	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
+	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -496,7 +538,6 @@ func run() int {
 
 	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	server := http.Server{
-		Addr: args.bindAddress,
 		Handler: handler.NewProxyHandler(&handler.Config{
 			Dialer:      dialerRoot,
 			Auth:        auth,
@@ -526,17 +567,38 @@ func run() int {
 	}
 
 	mainLogger.Info("Starting proxy server...")
-	var listener net.Listener
-	if args.bindUnixSocket != "" {
-		newListener, err := net.Listen("unix", args.bindUnixSocket)
 
-		if err != nil {
-			mainLogger.Critical("listen failed: %v", err)
-			return 3
+	listenerFactory := net.Listen
+	if args.bindReusePort {
+		if reuseport.Available() {
+			listenerFactory = reuseport.Listen
+		} else {
+			mainLogger.Warning("reuseport was requested but not available!")
 		}
+	}
+	if args.unixSockUnlink {
+		listenerFactory = func(orig func(string, string) (net.Listener, error)) func(string, string) (net.Listener, error) {
+			return func(network, address string) (net.Listener, error) {
+				if (network == "unix" || network == "unixdgram") && len(address) > 0 && address[0] != '@' {
+					os.Remove(address)
+				}
+				return orig(network, address)
+			}
+		}(listenerFactory)
+	}
+	if args.unixSockMode != 0 {
+		listenerFactory = func(orig func(string, string) (net.Listener, error)) func(string, string) (net.Listener, error) {
+			return func(network, address string) (net.Listener, error) {
+				if (network == "unix" || network == "unixdgram") && len(address) > 0 && address[0] != '@' {
+					defer os.Chmod(address, args.unixSockMode.Value())
+				}
+				return orig(network, address)
+			}
+		}(listenerFactory)
+	}
 
-		listener = newListener
-	} else if args.bindAddress == "" {
+	var listener net.Listener
+	if args.bind.address == "" {
 		// socket activation
 		listeners, err := activation.Listeners()
 		if err != nil {
@@ -554,15 +616,7 @@ func run() int {
 		}
 		listener = listeners[0]
 	} else {
-		listenerFactory := net.Listen
-		if args.bindReusePort {
-			if reuseport.Available() {
-				listenerFactory = reuseport.Listen
-			} else {
-				mainLogger.Warning("reuseport was requested but not available!")
-			}
-		}
-		newListener, err := listenerFactory("tcp", args.bindAddress)
+		newListener, err := listenerFactory(args.bind.af, args.bind.address)
 		if err != nil {
 			mainLogger.Critical("listen failed: %v", err)
 			return 3
@@ -648,14 +702,17 @@ func run() int {
 	defer listener.Close()
 
 	// debug endpoints setup
-	if args.bindPprof != "" {
+	if args.bindPprof.address != "" {
 		mux := http.NewServeMux()
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
 		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-		go func() { log.Fatal(http.ListenAndServe(args.bindPprof, mux)) }()
+		pprofListener, err := listenerFactory(args.bindPprof.af, args.bindPprof.address)
+		if err == nil {
+			go func() { log.Fatal(http.Serve(pprofListener, mux)) }()
+		}
 	}
 
 	mainLogger.Info("Proxy server started.")
