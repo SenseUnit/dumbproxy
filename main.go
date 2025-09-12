@@ -246,8 +246,16 @@ func parse_args() CLIArgs {
 		},
 	}
 	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
-	flag.StringVar(&args.bindAddress, "bind-address", ":8080", "HTTP proxy listen address. Set empty value to use systemd socket activation.")
-	flag.StringVar(&args.bindUnixSocket, "bind-unix-socket", "", "Unix domain socket to listen to, overrides bind-address if set.")
+	flag.Func("bind-address", "HTTP proxy listen address. Set empty value to use systemd socket activation.", func(p string) error {
+		args.bindAddress = p
+		args.bindUnixSocket = ""
+		return nil
+	})
+	flag.Func("bind-unix-socket", "Unix domain socket to listen to, overrides bind-address if set.", func(p string) error {
+		args.bindAddress = ""
+		args.bindUnixSocket = p
+		return nil
+	})
 	flag.BoolVar(&args.bindReusePort, "bind-reuseport", false, "allow multiple server instances on the same port")
 	flag.StringVar(&args.bindPprof, "bind-pprof", "", "enables pprof debug endpoints")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
