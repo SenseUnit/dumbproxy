@@ -1,13 +1,10 @@
 package log
 
 import (
+	"context"
 	"errors"
 	"io"
-	"time"
 )
-
-const MAX_LOG_QLEN = 128
-const QUEUE_SHUTDOWN_TIMEOUT = 500 * time.Millisecond
 
 type LogWriter struct {
 	writer io.Writer
@@ -17,7 +14,7 @@ type LogWriter struct {
 
 func (lw *LogWriter) Write(p []byte) (int, error) {
 	if p == nil {
-		return 0, errors.New("Can't write nil byte slice")
+		return 0, nil
 	}
 	buf := make([]byte, len(p))
 	copy(buf, p)
@@ -29,29 +26,36 @@ func (lw *LogWriter) Write(p []byte) (int, error) {
 	}
 }
 
-func NewLogWriter(writer io.Writer) *LogWriter {
+func NewLogWriter(writer io.Writer, qlen int) *LogWriter {
 	lw := &LogWriter{writer,
-		make(chan []byte, MAX_LOG_QLEN),
+		make(chan []byte, qlen),
 		make(chan struct{})}
 	go lw.loop()
 	return lw
 }
 
 func (lw *LogWriter) loop() {
+	defer close(lw.done)
 	for p := range lw.ch {
 		if p == nil {
 			break
 		}
 		lw.writer.Write(p)
 	}
-	lw.done <- struct{}{}
 }
 
-func (lw *LogWriter) Close() {
-	lw.ch <- nil
-	timer := time.After(QUEUE_SHUTDOWN_TIMEOUT)
+func (lw *LogWriter) Close(ctx context.Context) error {
 	select {
-	case <-timer:
+	case lw.ch <- nil:
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-lw.done:
+			return nil
+		}
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-lw.done:
+		return nil
 	}
 }
