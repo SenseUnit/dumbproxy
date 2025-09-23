@@ -158,7 +158,7 @@ type serialNumberSet struct {
 }
 
 func cutLeadingZeroes(b []byte) []byte {
-	for len(b) > 1 && b[0] == 0 {
+	for len(b) > 0 && b[0] == 0 {
 		b = b[1:]
 	}
 	return b
