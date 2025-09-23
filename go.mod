@@ -22,6 +22,8 @@ require (
 	golang.org/x/time v0.12.0
 )
 
+require github.com/ncruces/go-dns v1.2.7 // indirect
+
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect

@@ -42,6 +42,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
+	"github.com/SenseUnit/dumbproxy/resolver"
 	"github.com/SenseUnit/dumbproxy/tlsutil"
 	proxyproto "github.com/pires/go-proxyproto"
 
@@ -250,6 +251,7 @@ type CLIArgs struct {
 	jsProxyRouterInstances    int
 	proxyproto                bool
 	shutdownTimeout           time.Duration
+	nameservers               []string
 }
 
 func parse_args() CLIArgs {
@@ -360,6 +362,14 @@ func parse_args() CLIArgs {
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
+	flag.Func("nameserver", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://...). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets list", func(p string) error {
+		if p == "" {
+			args.nameservers = nil
+		} else {
+			args.nameservers = append(args.nameservers, p)
+		}
+		return nil
+	})
 	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
 	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
@@ -510,10 +520,18 @@ func run() int {
 
 	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
 
+	var nameResolver dialer.Resolver = net.DefaultResolver
+	if len(args.nameservers) > 0 {
+		nameResolver, err = resolver.FastFromURLs(args.nameservers...)
+		if err != nil {
+			mainLogger.Critical("Failed to create name resolver: %v", err)
+			return 3
+		}
+	}
 	if args.dnsCacheTTL > 0 {
 		cd := dialer.NewNameResolveCachingDialer(
 			dialerRoot,
-			net.DefaultResolver,
+			nameResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,
 			args.dnsCacheTimeout,
@@ -522,7 +540,7 @@ func run() int {
 		defer cd.Stop()
 		dialerRoot = cd
 	} else {
-		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, net.DefaultResolver)
+		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 	}
 
 	// handler requisites
