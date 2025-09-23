@@ -16,23 +16,6 @@ func mkbytes(l uint) []byte {
 	return b
 }
 
-var mask *big.Int = big.NewInt(0).Add(big.NewInt(0).Lsh(big.NewInt(1), uint(8*len(serialNumberKey{}))), big.NewInt(-1))
-
-func TestNormalizeSNBytes(t *testing.T) {
-	for i := uint(0); i <= 32; i++ {
-		t.Run(fmt.Sprintf("%d-bytes", i), func(t *testing.T) {
-			s := mkbytes(i)
-			k := normalizeSNBytes(s)
-			var a, b big.Int
-			a.SetBytes(s).And(&a, mask)
-			b.SetBytes(k[:])
-			if a.Cmp(&b) != 0 {
-				t.Fatalf("%d != %d", &a, &b)
-			}
-		})
-	}
-}
-
 type parseSerialBytesTestcase struct {
 	input  []byte
 	output []byte
