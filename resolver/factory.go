@@ -55,6 +55,8 @@ begin:
 		}
 		hp := net.JoinHostPort(host, port)
 		return dns.NewDoTResolver(hp, dns.DoTAddresses(hp))
+	case "default":
+		return net.DefaultResolver, nil
 	default:
 		return nil, errors.New("not implemented")
 	}

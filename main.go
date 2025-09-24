@@ -362,7 +362,7 @@ func parse_args() CLIArgs {
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
-	flag.Func("nameserver", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://...). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets list", func(p string) error {
+	flag.Func("dns-server", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://..., default://). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets list", func(p string) error {
 		if p == "" {
 			args.nameservers = nil
 		} else {
