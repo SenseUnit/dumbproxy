@@ -42,6 +42,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
 	clog "github.com/SenseUnit/dumbproxy/log"
+	"github.com/SenseUnit/dumbproxy/resolver"
 	"github.com/SenseUnit/dumbproxy/tlsutil"
 	proxyproto "github.com/pires/go-proxyproto"
 
@@ -196,6 +197,25 @@ type autocertCache struct {
 
 const envCacheEncKey = "DUMBPROXY_CACHE_ENC_KEY"
 
+type dnsPreferenceArg resolver.Preference
+
+func (a *dnsPreferenceArg) String() string {
+	return resolver.Preference(*a).String()
+}
+
+func (a *dnsPreferenceArg) Set(s string) error {
+	p, err := resolver.ParsePreference(s)
+	if err != nil {
+		return nil
+	}
+	*a = dnsPreferenceArg(p)
+	return nil
+}
+
+func (a *dnsPreferenceArg) Value() resolver.Preference {
+	return resolver.Preference(*a)
+}
+
 type bindSpec struct {
 	af      string
 	address string
@@ -240,6 +260,8 @@ type CLIArgs struct {
 	bwBurst                   int64
 	bwBuckets                 uint
 	bwSeparate                bool
+	dnsServers                []string
+	dnsPreferAddress          dnsPreferenceArg
 	dnsCacheTTL               time.Duration
 	dnsCacheNegTTL            time.Duration
 	dnsCacheTimeout           time.Duration
@@ -275,6 +297,7 @@ func parse_args() CLIArgs {
 			address: ":8080",
 			af:      "tcp",
 		},
+		dnsPreferAddress: dnsPreferenceArg(resolver.PreferenceIPv4),
 	}
 	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
 	flag.Func("bind-address", "HTTP proxy listen address. Set empty value to use systemd socket activation. (default \":8080\")", func(p string) error {
@@ -360,6 +383,15 @@ func parse_args() CLIArgs {
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
+	flag.Func("dns-server", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://..., default://). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets the list", func(p string) error {
+		if p == "" {
+			args.dnsServers = nil
+		} else {
+			args.dnsServers = append(args.dnsServers, p)
+		}
+		return nil
+	})
+	flag.Var(&args.dnsPreferAddress, "dns-prefer-address", "address resolution preference (none/ipv4/ipv6)")
 	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
 	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
@@ -510,10 +542,19 @@ func run() int {
 
 	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
 
+	var nameResolver dialer.Resolver = net.DefaultResolver
+	if len(args.dnsServers) > 0 {
+		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
+		if err != nil {
+			mainLogger.Critical("Failed to create name resolver: %v", err)
+			return 3
+		}
+	}
+	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
 	if args.dnsCacheTTL > 0 {
 		cd := dialer.NewNameResolveCachingDialer(
 			dialerRoot,
-			net.DefaultResolver,
+			nameResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,
 			args.dnsCacheTimeout,
@@ -522,7 +563,7 @@ func run() int {
 		defer cd.Stop()
 		dialerRoot = cd
 	} else {
-		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, net.DefaultResolver)
+		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 	}
 
 	// handler requisites

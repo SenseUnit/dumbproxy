@@ -11,6 +11,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/libp2p/go-reuseport v0.4.0
+	github.com/ncruces/go-dns v1.2.7
 	github.com/redis/go-redis/v9 v9.13.0
 	github.com/refraction-networking/utls v1.8.0
 	github.com/tg123/go-htpasswd v1.2.4

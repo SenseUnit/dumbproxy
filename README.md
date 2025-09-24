@@ -25,7 +25,13 @@ Simple, scriptable, secure forward proxy.
     * Optional AEAD encryption layer for cache
 * Per-user bandwidth limits
 * HTTP/2 support, both server and client, including h2c support
-* Optional DNS cache
+* Advanced DNS support
+  * Plain DNS
+  * DNS-over-HTTPS
+  * DNS-over-TLS
+  * System-provided DNS
+  * Competitive parallel resolving using any of above
+  * Optional DNS cache
 * Resilient to DPI (including active probing, see `hidden_domain` option for authentication providers)
 * Connecting via upstream HTTP(S)/SOCKS5 proxies (proxy chaining)
   * Optional parroting of TLS fingerprints of popular software such as web browsers.
@@ -493,6 +499,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	timeout for shared resolves of DNS cache (default 5s)
   -dns-cache-ttl duration
     	enable DNS cache with specified fixed TTL
+  -dns-prefer-address value
+    	address resolution preference (none/ipv4/ipv6) (default ipv4)
+  -dns-server value
+    	nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://..., default://). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets the list
   -hmac-genkey
     	generate hex-encoded HMAC signing key of optimal length
   -hmac-sign
