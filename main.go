@@ -994,18 +994,18 @@ func readConfig(filename string) error {
 		case 1:
 			if err := flag.Set(record[0], "true"); err != nil {
 				line, _ := r.FieldPos(0)
-				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+				return fmt.Errorf("error parsing config file %q at line %d (%#v): %w", filename, line, record, err)
 			}
 		case 2:
 			if err := flag.Set(record[0], record[1]); err != nil {
 				line, _ := r.FieldPos(0)
-				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+				return fmt.Errorf("error parsing config file %q at line %d (%#v): %w", filename, line, record, err)
 			}
 		default:
 			unified := strings.Join(record[1:], " ")
 			if err := flag.Set(record[0], unified); err != nil {
 				line, _ := r.FieldPos(0)
-				return fmt.Errorf("error parsing config file %q at line %d: %w", filename, line, err)
+				return fmt.Errorf("error parsing config file %q at line %d (%#v): %w", filename, line, record, err)
 			}
 		}
 	}
