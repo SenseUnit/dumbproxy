@@ -523,12 +523,12 @@ func run() int {
 		args.verbosity)
 
 	// setup auth provider
-	auth, err := auth.NewAuth(args.auth, authLogger)
+	authProvider, err := auth.NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
-	defer auth.Stop()
+	defer authProvider.Stop()
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
@@ -776,7 +776,7 @@ func run() int {
 		server := http.Server{
 			Handler: handler.NewProxyHandler(&handler.Config{
 				Dialer:      dialerRoot,
-				Auth:        auth,
+				Auth:        authProvider,
 				Logger:      proxyLogger,
 				UserIPHints: args.userIPHints,
 				Forward:     forwarder,
@@ -827,6 +827,15 @@ func run() int {
 					EnableConnect: true,
 				},
 			),
+		}
+		switch cs := authProvider.(type) {
+		case auth.NoAuth:
+			// pass, authentication is not needed
+		case socks5.CredentialStore:
+			opts = append(opts, socks5.WithCredential(cs))
+		default:
+			mainLogger.Critical("Chosen authentication method is not supported by this proxy operation mode.")
+			return 2
 		}
 
 		go func() {
