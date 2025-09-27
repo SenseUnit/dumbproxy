@@ -3,14 +3,15 @@ dumbproxy
 
 [![dumbproxy](https://snapcraft.io//dumbproxy/badge.svg)](https://snapcraft.io/dumbproxy)
 
-Simple, scriptable, secure forward proxy.
+Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
 
 ## Features
 
+* Multiple protocol support: both HTTP and SOCKS5 are supported
 * Cross-platform (Windows/Mac OS/Linux/Android (via shell)/\*BSD)
 * Deployment with a single self-contained binary
 * Zero-configuration
-* Supports CONNECT method and forwarding of HTTPS connections
+* Seamless forwarding of all kinds of TCP connections in addition to regular web-traffic forwarding
 * Supports `Basic` proxy authentication
   * Via auto-reloaded NCSA httpd-style passwords file
   * Via static login and password
@@ -527,6 +528,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	maximum TLS version accepted by server (default TLS13)
   -min-tls-version value
     	minimum TLS version accepted by server (default TLS12)
+  -mode value
+    	proxy operation mode (http/socks5) (default http)
   -passwd string
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int
