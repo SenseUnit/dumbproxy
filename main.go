@@ -827,6 +827,13 @@ func run() int {
 					EnableConnect: true,
 				},
 			),
+			socks5.WithConnectHandle(
+				handler.SOCKSHandler(
+					dialerRoot,
+					proxyLogger,
+					forwarder,
+				),
+			),
 		}
 		switch cs := authProvider.(type) {
 		case auth.NoAuth:

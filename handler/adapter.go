@@ -134,3 +134,30 @@ func (w wrappedH1RespWriter) Close() error {
 }
 
 var _ io.ReadWriteCloser = wrappedH1RespWriter{}
+
+type wrappedSOCKS struct {
+	r io.Reader
+	w io.Writer
+}
+
+func wrapSOCKS(r io.Reader, w io.Writer) wrappedSOCKS {
+	return wrappedSOCKS{
+		r: r,
+		w: w,
+	}
+}
+
+func (w wrappedSOCKS) Read(p []byte) (n int, err error) {
+	return w.r.Read(p)
+}
+
+func (w wrappedSOCKS) Write(p []byte) (n int, err error) {
+	return w.w.Write(p)
+}
+
+func (w wrappedSOCKS) Close() error {
+	// can't really close SOCKS reader or writer
+	return nil
+}
+
+var _ io.ReadWriteCloser = wrappedSOCKS{}

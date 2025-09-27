@@ -24,6 +24,9 @@ type JSRequestInfo struct {
 }
 
 func JSRequestInfoFromRequest(req *http.Request) *JSRequestInfo {
+	if req == nil {
+		return nil
+	}
 	return &JSRequestInfo{
 		Method:           req.Method,
 		URL:              req.URL.String(),
