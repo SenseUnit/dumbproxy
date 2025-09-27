@@ -821,7 +821,7 @@ func run() int {
 		return 0
 	case proxyModeSOCKS5:
 		opts := []socks5.Option{
-			socks5.WithLogger(socks5.NewLogger(log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile))),
+			socks5.WithLogger(socks5.NewLogger(log.New(logWriter, "SOCKSSRV: ", log.LstdFlags|log.Lshortfile))),
 			socks5.WithRule(
 				&socks5.PermitCommand{
 					EnableConnect: true,
