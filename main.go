@@ -578,34 +578,6 @@ func run() int {
 	}
 
 	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	server := http.Server{
-		Handler: handler.NewProxyHandler(&handler.Config{
-			Dialer:      dialerRoot,
-			Auth:        auth,
-			Logger:      proxyLogger,
-			UserIPHints: args.userIPHints,
-			Forward:     forwarder,
-		}),
-		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
-		ReadTimeout:       0,
-		ReadHeaderTimeout: args.reqHeaderTimeout,
-		WriteTimeout:      0,
-		IdleTimeout:       0,
-		Protocols:         new(http.Protocols),
-		BaseContext: func(_ net.Listener) context.Context {
-			return stopContext
-		},
-	}
-
-	// listener setup
-	if args.disableHTTP2 {
-		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
-		server.Protocols.SetHTTP1(true)
-	} else {
-		server.Protocols.SetHTTP1(true)
-		server.Protocols.SetHTTP2(true)
-		server.Protocols.SetUnencryptedHTTP2(true)
-	}
 
 	mainLogger.Info("Starting proxy server...")
 
@@ -758,8 +730,34 @@ func run() int {
 
 	mainLogger.Info("Proxy server started.")
 
-	shutdownComplete := make(chan struct{})
+	server := http.Server{
+		Handler: handler.NewProxyHandler(&handler.Config{
+			Dialer:      dialerRoot,
+			Auth:        auth,
+			Logger:      proxyLogger,
+			UserIPHints: args.userIPHints,
+			Forward:     forwarder,
+		}),
+		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
+		ReadTimeout:       0,
+		ReadHeaderTimeout: args.reqHeaderTimeout,
+		WriteTimeout:      0,
+		IdleTimeout:       0,
+		Protocols:         new(http.Protocols),
+		BaseContext: func(_ net.Listener) context.Context {
+			return stopContext
+		},
+	}
+	if args.disableHTTP2 {
+		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
+		server.Protocols.SetHTTP1(true)
+	} else {
+		server.Protocols.SetHTTP1(true)
+		server.Protocols.SetHTTP2(true)
+		server.Protocols.SetUnencryptedHTTP2(true)
+	}
 
+	shutdownComplete := make(chan struct{})
 	go func() {
 		<-stopContext.Done()
 		mainLogger.Info("Shutting down...")
