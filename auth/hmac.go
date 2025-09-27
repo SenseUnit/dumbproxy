@@ -84,6 +84,10 @@ func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 	return hmac.Equal(token.Signature[:], expectedMAC)
 }
 
+func (auth *HMACAuth) Valid(user, password, userAddr string) bool {
+	return VerifyHMACLoginAndPassword(auth.secret, user, password)
+}
+
 func (auth *HMACAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {

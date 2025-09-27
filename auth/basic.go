@@ -115,6 +115,11 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 	}
 }
 
+func (auth *BasicAuth) Valid(user, password, userAddr string) bool {
+	pwFile := auth.pw.Load().file
+	return pwFile.Match(user, password)
+}
+
 func (auth *BasicAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
