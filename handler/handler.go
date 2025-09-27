@@ -28,11 +28,13 @@ type HandlerDialer interface {
 	DialContext(ctx context.Context, net, address string) (net.Conn, error)
 }
 
+type ForwardFunc = func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error
+
 type ProxyHandler struct {
 	auth          auth.Auth
 	logger        *clog.CondLogger
 	dialer        HandlerDialer
-	forward       func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error
+	forward       ForwardFunc
 	httptransport http.RoundTripper
 	outbound      map[string]string
 	outboundMux   sync.RWMutex

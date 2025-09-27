@@ -15,6 +15,7 @@ require (
 	github.com/redis/go-redis/v9 v9.13.0
 	github.com/refraction-networking/utls v1.8.0
 	github.com/tg123/go-htpasswd v1.2.4
+	github.com/things-go/go-socks5 v0.1.0
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/crypto v0.41.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20250826074233-8f580defa01d

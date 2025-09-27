@@ -30,6 +30,7 @@ import (
 
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/libp2p/go-reuseport"
+	"github.com/things-go/go-socks5"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
@@ -195,6 +196,43 @@ type autocertCache struct {
 	value string
 }
 
+type proxyMode int
+
+const (
+	_ proxyMode = iota
+	proxyModeHTTP
+	proxyModeSOCKS5
+)
+
+type proxyModeArg struct {
+	value proxyMode
+}
+
+func (a *proxyModeArg) Set(arg string) error {
+	var val proxyMode
+	switch s := strings.ToLower(arg); s {
+	case "http", "https":
+		val = proxyModeHTTP
+	case "socks", "socks5":
+		val = proxyModeSOCKS5
+	default:
+		return fmt.Errorf("unrecognized proxy mode %q", arg)
+	}
+	a.value = val
+	return nil
+}
+
+func (a *proxyModeArg) String() string {
+	switch a.value {
+	case proxyModeHTTP:
+		return "http"
+	case proxyModeSOCKS5:
+		return "socks5"
+	default:
+		return fmt.Sprintf("proxyMode(%d)", int(a.value))
+	}
+}
+
 const envCacheEncKey = "DUMBPROXY_CACHE_ENC_KEY"
 
 type dnsPreferenceArg resolver.Preference
@@ -227,6 +265,7 @@ type CLIArgs struct {
 	bindPprof                 bindSpec
 	unixSockUnlink            bool
 	unixSockMode              modeArg
+	mode                      proxyModeArg
 	auth                      string
 	verbosity                 int
 	cert, key, cafile         string
@@ -297,6 +336,7 @@ func parse_args() CLIArgs {
 			address: ":8080",
 			af:      "tcp",
 		},
+		mode:             proxyModeArg{proxyModeHTTP},
 		dnsPreferAddress: dnsPreferenceArg(resolver.PreferenceIPv4),
 	}
 	args.autocertCacheEncKey.Set(os.Getenv(envCacheEncKey))
@@ -323,6 +363,7 @@ func parse_args() CLIArgs {
 	})
 	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
 	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
+	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5)")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -482,12 +523,12 @@ func run() int {
 		args.verbosity)
 
 	// setup auth provider
-	auth, err := auth.NewAuth(args.auth, authLogger)
+	authProvider, err := auth.NewAuth(args.auth, authLogger)
 	if err != nil {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
-	defer auth.Stop()
+	defer authProvider.Stop()
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
@@ -578,34 +619,6 @@ func run() int {
 	}
 
 	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	server := http.Server{
-		Handler: handler.NewProxyHandler(&handler.Config{
-			Dialer:      dialerRoot,
-			Auth:        auth,
-			Logger:      proxyLogger,
-			UserIPHints: args.userIPHints,
-			Forward:     forwarder,
-		}),
-		ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
-		ReadTimeout:       0,
-		ReadHeaderTimeout: args.reqHeaderTimeout,
-		WriteTimeout:      0,
-		IdleTimeout:       0,
-		Protocols:         new(http.Protocols),
-		BaseContext: func(_ net.Listener) context.Context {
-			return stopContext
-		},
-	}
-
-	// listener setup
-	if args.disableHTTP2 {
-		server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
-		server.Protocols.SetHTTP1(true)
-	} else {
-		server.Protocols.SetHTTP1(true)
-		server.Protocols.SetHTTP2(true)
-		server.Protocols.SetUnencryptedHTTP2(true)
-	}
 
 	mainLogger.Info("Starting proxy server...")
 
@@ -758,26 +771,94 @@ func run() int {
 
 	mainLogger.Info("Proxy server started.")
 
-	shutdownComplete := make(chan struct{})
+	switch args.mode.value {
+	case proxyModeHTTP:
+		server := http.Server{
+			Handler: handler.NewProxyHandler(&handler.Config{
+				Dialer:      dialerRoot,
+				Auth:        authProvider,
+				Logger:      proxyLogger,
+				UserIPHints: args.userIPHints,
+				Forward:     forwarder,
+			}),
+			ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
+			ReadTimeout:       0,
+			ReadHeaderTimeout: args.reqHeaderTimeout,
+			WriteTimeout:      0,
+			IdleTimeout:       0,
+			Protocols:         new(http.Protocols),
+			BaseContext: func(_ net.Listener) context.Context {
+				return stopContext
+			},
+		}
+		if args.disableHTTP2 {
+			server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))
+			server.Protocols.SetHTTP1(true)
+		} else {
+			server.Protocols.SetHTTP1(true)
+			server.Protocols.SetHTTP2(true)
+			server.Protocols.SetUnencryptedHTTP2(true)
+		}
 
-	go func() {
-		<-stopContext.Done()
-		mainLogger.Info("Shutting down...")
-		shutdownContext, cl := context.WithTimeout(context.Background(), args.shutdownTimeout)
-		defer cl()
-		server.Shutdown(shutdownContext)
-		close(shutdownComplete)
-	}()
+		shutdownComplete := make(chan struct{})
+		go func() {
+			<-stopContext.Done()
+			mainLogger.Info("Shutting down...")
+			shutdownContext, cl := context.WithTimeout(context.Background(), args.shutdownTimeout)
+			defer cl()
+			server.Shutdown(shutdownContext)
+			close(shutdownComplete)
+		}()
 
-	// setup done
-	if err := server.Serve(listener); err == http.ErrServerClosed {
-		// need to wait shutdown to exit
-		<-shutdownComplete
-		mainLogger.Info("Reached normal server termination.")
-	} else {
-		mainLogger.Critical("Server terminated with a reason: %v", err)
+		// setup done
+		if err := server.Serve(listener); err == http.ErrServerClosed {
+			// need to wait shutdown to exit
+			<-shutdownComplete
+			mainLogger.Info("Reached normal server termination.")
+		} else {
+			mainLogger.Critical("Server terminated with a reason: %v", err)
+		}
+		return 0
+	case proxyModeSOCKS5:
+		opts := []socks5.Option{
+			socks5.WithLogger(socks5.NewLogger(log.New(logWriter, "SOCKSSRV: ", log.LstdFlags|log.Lshortfile))),
+			socks5.WithRule(
+				&socks5.PermitCommand{
+					EnableConnect: true,
+				},
+			),
+			socks5.WithConnectHandle(
+				handler.SOCKSHandler(
+					dialerRoot,
+					proxyLogger,
+					forwarder,
+				),
+			),
+		}
+		switch cs := authProvider.(type) {
+		case auth.NoAuth:
+			// pass, authentication is not needed
+		case socks5.CredentialStore:
+			opts = append(opts, socks5.WithCredential(cs))
+		default:
+			mainLogger.Critical("Chosen authentication method is not supported by this proxy operation mode.")
+			return 2
+		}
+
+		go func() {
+			<-stopContext.Done()
+			mainLogger.Info("Shutting down...")
+			listener.Close()
+		}()
+		server := socks5.NewServer(opts...)
+		if err := server.Serve(listener); err != nil {
+			mainLogger.Info("Reached normal server termination.")
+		}
+		return 0
 	}
-	return 0
+
+	mainLogger.Critical("unknown proxy mode")
+	return 2
 }
 
 func makeServerTLSConfig(certfile, keyfile, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {

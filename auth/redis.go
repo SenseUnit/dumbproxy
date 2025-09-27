@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
 
@@ -44,6 +45,23 @@ func NewRedisAuth(param_url *url.URL, cluster bool, logger *clog.CondLogger) (*R
 		auth.r = redis.NewClient(opts)
 	}
 	return auth, nil
+}
+
+func (auth *RedisAuth) Valid(user, password, userAddr string) bool {
+	ctx, cl := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cl()
+	encodedPasswd, err := auth.r.Get(ctx, auth.keyPrefix+user).Result()
+	if err != nil {
+		auth.logger.Debug("error fetching key %q from Redis: %v", auth.keyPrefix+user, err)
+		return false
+	}
+	matcher, err := makePasswdMatcher(encodedPasswd)
+	if err != nil {
+		auth.logger.Debug("can't create password matcher from Redis key %q: %v", auth.keyPrefix+user, err)
+		return false
+	}
+
+	return matcher.MatchesPassword(password)
 }
 
 func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
