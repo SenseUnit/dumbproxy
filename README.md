@@ -395,6 +395,17 @@ Supported proxy schemes are:
 * `h2c` - HTTP/2 proxy over plaintext connection with the CONNECT method support. Examples: `h2c://example.org:8080`.
   * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
+* `socks5s`, `socks5hs` - SOCKS5 proxy over TLS with hostname resolving via remote proxy. Example: `socks5s://example.com:10443`. This method also supports additional parameters passed in query string:
+  * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
+  * `sni` - override value of ServerName Indication extension.
+  * `peername` - expect specified name in peer certificate. Empty string relaxes any name constraints.
+  * `cert` - file with user certificate for mutual TLS authentication. Should be used in conjunction with `key`.
+  * `key` - file with private key matching user certificate specified with `cert` option.
+  * `ciphers` - colon-separated list of enabled TLS ciphersuites.
+  * `curves` - colon-separated list of enabled TLS key exchange curves.
+  * `min-tls-version` - minimum TLS version.
+  * `max-tls-version` - maximum TLS version.
+  * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 * `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
    * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
