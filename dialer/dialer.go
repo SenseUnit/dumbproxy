@@ -22,6 +22,8 @@ func init() {
 	xproxy.RegisterDialerType("h2c", H2ProxyDialerFromURL)
 	xproxy.RegisterDialerType("set-src-hints", NewHintsSettingDialerFromURL)
 	xproxy.RegisterDialerType("cached", GetCachedDialer)
+	xproxy.RegisterDialerType("socks5s", SOCKS5SDialerFromURL)
+	xproxy.RegisterDialerType("socks5hs", SOCKS5SDialerFromURL)
 }
 
 type LegacyDialer interface {
