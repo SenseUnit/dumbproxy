@@ -313,8 +313,8 @@ type CLIArgs struct {
 	shutdownTimeout           time.Duration
 }
 
-func parse_args() CLIArgs {
-	args := CLIArgs{
+func parse_args() *CLIArgs {
+	args := &CLIArgs{
 		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
 		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
 		denyDstAddr: PrefixList{
@@ -684,9 +684,7 @@ func run() int {
 	}
 
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile,
-			args.ciphers, args.curves,
-			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
+		cfg, err1 := makeServerTLSConfig(args)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -740,16 +738,18 @@ func run() int {
 		}
 		if args.autocertHTTP != "" {
 			go func() {
-				log.Fatalf("HTTP-01 ACME challenge server stopped: %v",
+				mainLogger.Critical("HTTP-01 ACME challenge server stopped: %v",
 					http.ListenAndServe(args.autocertHTTP, m.HTTPHandler(nil)))
 			}()
 		}
-		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, args.curves,
-			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
+		cfg, err := makeServerTLSConfig(args)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
+		}
+		cfg.GetCertificate = m.GetCertificate
+		if len(cfg.NextProtos) > 0 {
+			cfg.NextProtos = append(cfg.NextProtos, acme.ALPNProto)
 		}
 		listener = tls.NewListener(listener, cfg)
 	}
@@ -861,43 +861,20 @@ func run() int {
 	return 2
 }
 
-func makeServerTLSConfig(certfile, keyfile, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	cfg := tls.Config{
-		MinVersion: minVer,
-		MaxVersion: maxVer,
+		MinVersion: uint16(args.minTLSVersion),
+		MaxVersion: uint16(args.maxTLSVersion),
 	}
-	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
-	if err != nil {
-		return nil, err
-	}
-	cfg.Certificates = []tls.Certificate{cert}
-	if cafile != "" {
-		roots, err := tlsutil.LoadCAfile(cafile)
+	if args.cert != "" {
+		cert, err := tls.LoadX509KeyPair(args.cert, args.key)
 		if err != nil {
 			return nil, err
 		}
-		cfg.ClientCAs = roots
-		cfg.ClientAuth = tls.VerifyClientCertIfGiven
+		cfg.Certificates = []tls.Certificate{cert}
 	}
-	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
-	if err != nil {
-		return nil, err
-	}
-	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
-	if err != nil {
-		return nil, err
-	}
-	if h2 {
-		cfg.NextProtos = []string{"h2", "http/1.1"}
-	} else {
-		cfg.NextProtos = []string{"http/1.1"}
-	}
-	return &cfg, nil
-}
-
-func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
-	if cafile != "" {
-		roots, err := tlsutil.LoadCAfile(cafile)
+	if args.cafile != "" {
+		roots, err := tlsutil.LoadCAfile(args.cafile)
 		if err != nil {
 			return nil, err
 		}
@@ -905,22 +882,20 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers, curves string, minV
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
 	var err error
-	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
+	cfg.CipherSuites, err = tlsutil.ParseCipherList(args.ciphers)
 	if err != nil {
 		return nil, err
 	}
-	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
+	cfg.CurvePreferences, err = tlsutil.ParseCurveList(args.curves)
 	if err != nil {
 		return nil, err
 	}
-	if h2 {
-		cfg.NextProtos = []string{"h2", "http/1.1", "acme-tls/1"}
+	if !args.disableHTTP2 {
+		cfg.NextProtos = []string{"h2", "http/1.1"}
 	} else {
-		cfg.NextProtos = []string{"http/1.1", "acme-tls/1"}
+		cfg.NextProtos = []string{"http/1.1"}
 	}
-	cfg.MinVersion = minVer
-	cfg.MaxVersion = maxVer
-	return cfg, nil
+	return &cfg, nil
 }
 
 func list_ciphers() {
