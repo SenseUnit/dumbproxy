@@ -67,25 +67,40 @@ func arg_fail(msg string) {
 	os.Exit(2)
 }
 
-type CSVArg []string
-
-func (a *CSVArg) Set(s string) error {
-	*a = strings.Split(s, ",")
-	return nil
+type CSVArg struct {
+	values []string
 }
 
 func (a *CSVArg) String() string {
-	if a == nil {
-		return "<nil>"
+	if len(a.values) == 0 {
+		return ""
 	}
-	if *a == nil {
-		return "<empty>"
-	}
-	return strings.Join(*a, ",")
+	buf := new(bytes.Buffer)
+	wr := csv.NewWriter(buf)
+	wr.Write(a.values)
+	wr.Flush()
+	return strings.TrimRight(buf.String(), "\n")
 }
 
-func (a *CSVArg) Value() []string {
-	return []string(*a)
+func (a *CSVArg) Set(line string) error {
+	if line == "" {
+		a.values = nil
+		return nil
+	}
+	rd := csv.NewReader(strings.NewReader(line))
+	rd.FieldsPerRecord = -1
+	rd.TrimLeadingSpace = true
+	rd.ReuseRecord = true
+	values, err := rd.Read()
+	if err == io.EOF {
+		a.values = nil
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("unable to parse comma-separated argument: %w", err)
+	}
+	a.values = values
+	return nil
 }
 
 type PrefixList []netip.Prefix
@@ -295,6 +310,8 @@ type CLIArgs struct {
 	userIPHints               bool
 	minTLSVersion             TLSVersionArg
 	maxTLSVersion             TLSVersionArg
+	tlsALPNEnabled            bool
+	tlsALPNProtos             CSVArg
 	bwLimit                   uint64
 	bwBurst                   int64
 	bwBuckets                 uint
@@ -420,6 +437,8 @@ func parse_args() *CLIArgs {
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
+	flag.BoolVar(&args.tlsALPNEnabled, "tls-alpn-enabled", true, "enable application protocol negotiation with TLS ALPN extension")
+	flag.Var(&args.tlsALPNProtos, "tls-alpn-protos", "comma-separated values (RFC 4180) of enabled ALPN identities")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
@@ -733,8 +752,8 @@ func run() int {
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
 			Email:  args.autocertEmail,
 		}
-		if args.autocertWhitelist.Value() != nil {
-			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.Value()...)
+		if args.autocertWhitelist.values != nil {
+			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.values...)
 		}
 		if args.autocertHTTP != "" {
 			go func() {
