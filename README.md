@@ -553,6 +553,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	amount of time allowed to read request headers (default 30s)
   -shutdown-timeout duration
     	grace period during server shutdown (default 1s)
+  -tls-alpn-enabled
+    	enable application protocol negotiation with TLS ALPN extension (default true)
   -unix-sock-mode value
     	set file mode for bound unix socket
   -unix-sock-unlink
