@@ -909,10 +909,16 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !args.disableHTTP2 {
-		cfg.NextProtos = []string{"h2", "http/1.1"}
-	} else {
-		cfg.NextProtos = []string{"http/1.1"}
+	if args.tlsALPNEnabled {
+		if len(args.tlsALPNProtos.values) == 0 {
+			if !args.disableHTTP2 {
+				cfg.NextProtos = []string{"h2", "http/1.1"}
+			} else {
+				cfg.NextProtos = []string{"http/1.1"}
+			}
+		} else {
+			cfg.NextProtos = args.tlsALPNProtos.values
+		}
 	}
 	return &cfg, nil
 }
