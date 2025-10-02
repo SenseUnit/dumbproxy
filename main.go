@@ -311,7 +311,6 @@ type CLIArgs struct {
 	minTLSVersion             TLSVersionArg
 	maxTLSVersion             TLSVersionArg
 	tlsALPNEnabled            bool
-	tlsALPNProtos             CSVArg
 	bwLimit                   uint64
 	bwBurst                   int64
 	bwBuckets                 uint
@@ -438,7 +437,6 @@ func parse_args() *CLIArgs {
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.BoolVar(&args.tlsALPNEnabled, "tls-alpn-enabled", true, "enable application protocol negotiation with TLS ALPN extension")
-	flag.Var(&args.tlsALPNProtos, "tls-alpn-protos", "comma-separated values (RFC 4180) of enabled ALPN identities")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
@@ -910,14 +908,10 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 		return nil, err
 	}
 	if args.tlsALPNEnabled {
-		if len(args.tlsALPNProtos.values) == 0 {
-			if !args.disableHTTP2 {
-				cfg.NextProtos = []string{"h2", "http/1.1"}
-			} else {
-				cfg.NextProtos = []string{"http/1.1"}
-			}
+		if !args.disableHTTP2 {
+			cfg.NextProtos = []string{"h2", "http/1.1"}
 		} else {
-			cfg.NextProtos = args.tlsALPNProtos.values
+			cfg.NextProtos = []string{"http/1.1"}
 		}
 	}
 	return &cfg, nil
