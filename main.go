@@ -67,25 +67,40 @@ func arg_fail(msg string) {
 	os.Exit(2)
 }
 
-type CSVArg []string
-
-func (a *CSVArg) Set(s string) error {
-	*a = strings.Split(s, ",")
-	return nil
+type CSVArg struct {
+	values []string
 }
 
 func (a *CSVArg) String() string {
-	if a == nil {
-		return "<nil>"
+	if len(a.values) == 0 {
+		return ""
 	}
-	if *a == nil {
-		return "<empty>"
-	}
-	return strings.Join(*a, ",")
+	buf := new(bytes.Buffer)
+	wr := csv.NewWriter(buf)
+	wr.Write(a.values)
+	wr.Flush()
+	return strings.TrimRight(buf.String(), "\n")
 }
 
-func (a *CSVArg) Value() []string {
-	return []string(*a)
+func (a *CSVArg) Set(line string) error {
+	if line == "" {
+		a.values = nil
+		return nil
+	}
+	rd := csv.NewReader(strings.NewReader(line))
+	rd.FieldsPerRecord = -1
+	rd.TrimLeadingSpace = true
+	rd.ReuseRecord = true
+	values, err := rd.Read()
+	if err == io.EOF {
+		a.values = nil
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("unable to parse comma-separated argument: %w", err)
+	}
+	a.values = values
+	return nil
 }
 
 type PrefixList []netip.Prefix
@@ -295,6 +310,7 @@ type CLIArgs struct {
 	userIPHints               bool
 	minTLSVersion             TLSVersionArg
 	maxTLSVersion             TLSVersionArg
+	tlsALPNEnabled            bool
 	bwLimit                   uint64
 	bwBurst                   int64
 	bwBuckets                 uint
@@ -313,8 +329,8 @@ type CLIArgs struct {
 	shutdownTimeout           time.Duration
 }
 
-func parse_args() CLIArgs {
-	args := CLIArgs{
+func parse_args() *CLIArgs {
+	args := &CLIArgs{
 		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
 		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
 		denyDstAddr: PrefixList{
@@ -420,6 +436,7 @@ func parse_args() CLIArgs {
 	flag.BoolVar(&args.userIPHints, "user-ip-hints", false, "allow IP hints to be specified by user in X-Src-IP-Hints header")
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
+	flag.BoolVar(&args.tlsALPNEnabled, "tls-alpn-enabled", true, "enable application protocol negotiation with TLS ALPN extension")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
@@ -684,9 +701,7 @@ func run() int {
 	}
 
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args.cert, args.key, args.cafile,
-			args.ciphers, args.curves,
-			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
+		cfg, err1 := makeServerTLSConfig(args)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -735,21 +750,23 @@ func run() int {
 			Client: &acme.Client{DirectoryURL: args.autocertACME},
 			Email:  args.autocertEmail,
 		}
-		if args.autocertWhitelist.Value() != nil {
-			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.Value()...)
+		if args.autocertWhitelist.values != nil {
+			m.HostPolicy = autocert.HostWhitelist(args.autocertWhitelist.values...)
 		}
 		if args.autocertHTTP != "" {
 			go func() {
-				log.Fatalf("HTTP-01 ACME challenge server stopped: %v",
+				mainLogger.Critical("HTTP-01 ACME challenge server stopped: %v",
 					http.ListenAndServe(args.autocertHTTP, m.HTTPHandler(nil)))
 			}()
 		}
-		cfg := m.TLSConfig()
-		cfg, err = updateServerTLSConfig(cfg, args.cafile, args.ciphers, args.curves,
-			uint16(args.minTLSVersion), uint16(args.maxTLSVersion), !args.disableHTTP2)
+		cfg, err := makeServerTLSConfig(args)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
+		}
+		cfg.GetCertificate = m.GetCertificate
+		if len(cfg.NextProtos) > 0 {
+			cfg.NextProtos = append(cfg.NextProtos, acme.ALPNProto)
 		}
 		listener = tls.NewListener(listener, cfg)
 	}
@@ -861,43 +878,20 @@ func run() int {
 	return 2
 }
 
-func makeServerTLSConfig(certfile, keyfile, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
+func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	cfg := tls.Config{
-		MinVersion: minVer,
-		MaxVersion: maxVer,
+		MinVersion: uint16(args.minTLSVersion),
+		MaxVersion: uint16(args.maxTLSVersion),
 	}
-	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
-	if err != nil {
-		return nil, err
-	}
-	cfg.Certificates = []tls.Certificate{cert}
-	if cafile != "" {
-		roots, err := tlsutil.LoadCAfile(cafile)
+	if args.cert != "" {
+		cert, err := tls.LoadX509KeyPair(args.cert, args.key)
 		if err != nil {
 			return nil, err
 		}
-		cfg.ClientCAs = roots
-		cfg.ClientAuth = tls.VerifyClientCertIfGiven
+		cfg.Certificates = []tls.Certificate{cert}
 	}
-	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
-	if err != nil {
-		return nil, err
-	}
-	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
-	if err != nil {
-		return nil, err
-	}
-	if h2 {
-		cfg.NextProtos = []string{"h2", "http/1.1"}
-	} else {
-		cfg.NextProtos = []string{"http/1.1"}
-	}
-	return &cfg, nil
-}
-
-func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers, curves string, minVer, maxVer uint16, h2 bool) (*tls.Config, error) {
-	if cafile != "" {
-		roots, err := tlsutil.LoadCAfile(cafile)
+	if args.cafile != "" {
+		roots, err := tlsutil.LoadCAfile(args.cafile)
 		if err != nil {
 			return nil, err
 		}
@@ -905,22 +899,22 @@ func updateServerTLSConfig(cfg *tls.Config, cafile, ciphers, curves string, minV
 		cfg.ClientAuth = tls.VerifyClientCertIfGiven
 	}
 	var err error
-	cfg.CipherSuites, err = tlsutil.ParseCipherList(ciphers)
+	cfg.CipherSuites, err = tlsutil.ParseCipherList(args.ciphers)
 	if err != nil {
 		return nil, err
 	}
-	cfg.CurvePreferences, err = tlsutil.ParseCurveList(curves)
+	cfg.CurvePreferences, err = tlsutil.ParseCurveList(args.curves)
 	if err != nil {
 		return nil, err
 	}
-	if h2 {
-		cfg.NextProtos = []string{"h2", "http/1.1", "acme-tls/1"}
-	} else {
-		cfg.NextProtos = []string{"http/1.1", "acme-tls/1"}
+	if args.tlsALPNEnabled {
+		if !args.disableHTTP2 {
+			cfg.NextProtos = []string{"h2", "http/1.1"}
+		} else {
+			cfg.NextProtos = []string{"http/1.1"}
+		}
 	}
-	cfg.MinVersion = minVer
-	cfg.MaxVersion = maxVer
-	return cfg, nil
+	return &cfg, nil
 }
 
 func list_ciphers() {
