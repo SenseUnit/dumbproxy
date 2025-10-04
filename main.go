@@ -384,7 +384,7 @@ func parse_args() *CLIArgs {
 	})
 	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
 	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
-	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5)")
+	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5/stdio)")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")

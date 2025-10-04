@@ -42,6 +42,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
 * Scripting with JavaScript:
   * Access filter by JS function
   * Upstream proxy selection by JS function
+* Seamless proxy client integration with OpenSSH: `ssh -o ProxyCommand="dumbproxy -config proxy.cfg -mode stdio %h %p" root@server1`
 
 ## Installation
 
@@ -540,7 +541,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -min-tls-version value
     	minimum TLS version accepted by server (default TLS12)
   -mode value
-    	proxy operation mode (http/socks5) (default http)
+    	proxy operation mode (http/socks5/stdio) (default http)
   -passwd string
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int
