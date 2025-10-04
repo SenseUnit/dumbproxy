@@ -217,6 +217,7 @@ const (
 	_ proxyMode = iota
 	proxyModeHTTP
 	proxyModeSOCKS5
+	proxyModeStdIO
 )
 
 type proxyModeArg struct {
@@ -230,6 +231,8 @@ func (a *proxyModeArg) Set(arg string) error {
 		val = proxyModeHTTP
 	case "socks", "socks5":
 		val = proxyModeSOCKS5
+	case "stdio":
+		val = proxyModeStdIO
 	default:
 		return fmt.Errorf("unrecognized proxy mode %q", arg)
 	}
@@ -243,6 +246,8 @@ func (a *proxyModeArg) String() string {
 		return "http"
 	case proxyModeSOCKS5:
 		return "socks5"
+	case proxyModeStdIO:
+		return "stdio"
 	default:
 		return fmt.Sprintf("proxyMode(%d)", int(a.value))
 	}
@@ -379,7 +384,7 @@ func parse_args() *CLIArgs {
 	})
 	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
 	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
-	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5)")
+	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5/stdio)")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -510,9 +515,16 @@ func run() int {
 		return 0
 	}
 
-	// we don't expect positional arguments in the main operation mode
-	if len(args.positionalArgs) > 0 {
-		arg_fail("Unexpected positional arguments! Check your command line.")
+	if args.mode.value == proxyModeStdIO {
+		// expect exactly two positional arguments
+		if len(args.positionalArgs) != 2 {
+			arg_fail("Exactly two positional arguments are expected in this mode: host and port")
+		}
+	} else {
+		// we don't expect positional arguments in the main operation mode
+		if len(args.positionalArgs) > 0 {
+			arg_fail("Unexpected positional arguments! Check your command line.")
+		}
 	}
 
 	// setup logging
@@ -640,7 +652,10 @@ func run() int {
 	mainLogger.Info("Starting proxy server...")
 
 	listenerFactory := net.Listen
-	if args.bindReusePort {
+	switch {
+	case args.mode.value == proxyModeStdIO:
+		listenerFactory = handler.DummyListen
+	case args.bindReusePort:
 		if reuseport.Available() {
 			listenerFactory = reuseport.Listen
 		} else {
@@ -870,6 +885,13 @@ func run() int {
 		server := socks5.NewServer(opts...)
 		if err := server.Serve(listener); err != nil {
 			mainLogger.Info("Reached normal server termination.")
+		}
+		return 0
+	case proxyModeStdIO:
+		handler := handler.StdIOHandler(dialerRoot, proxyLogger, forwarder)
+		address := net.JoinHostPort(args.positionalArgs[0], args.positionalArgs[1])
+		if err := handler(stopContext, os.Stdin, os.Stdout, address); err != nil {
+			mainLogger.Error("Connection interrupted: %v", err)
 		}
 		return 0
 	}

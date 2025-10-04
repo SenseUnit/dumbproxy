@@ -32,8 +32,10 @@ type filterContextParams struct {
 }
 
 func FilterParamsFromContext(ctx context.Context) (*http.Request, string) {
-	params := ctx.Value(filterContextKey{}).(filterContextParams)
-	return params.req, params.username
+	if params, ok := ctx.Value(filterContextKey{}).(filterContextParams); ok {
+		return params.req, params.username
+	}
+	return nil, ""
 }
 
 func FilterParamsToContext(ctx context.Context, req *http.Request, username string) context.Context {
