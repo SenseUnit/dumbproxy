@@ -1,7 +1,7 @@
 name: dumbproxy
 summary: Simple, scriptable, secure forward proxy.
 description: >
-  Dumbest HTTP proxy ever. See documentation for details:
+  Simple, scriptable, secure forward proxy. See documentation for details:
   https://github.com/SenseUnit/dumbproxy/blob/master/README.md
 
 confinement: strict
