@@ -31,6 +31,7 @@ type CertAuth struct {
 	logger            *clog.CondLogger
 	stopOnce          sync.Once
 	stopChan          chan struct{}
+	next              Auth
 }
 
 func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error) {
@@ -62,11 +63,18 @@ func NewCertAuth(param_url *url.URL, logger *clog.CondLogger) (*CertAuth, error)
 			go auth.reloadLoop(reloadInterval)
 		}
 	}
+	if nextAuth := values.Get("next"); nextAuth != "" {
+		nap, err := NewAuth(nextAuth, logger)
+		if err != nil {
+			return nil, fmt.Errorf("chained auth provider construction failed: %w", err)
+		}
+		auth.next = nap
+	}
 
 	return auth, nil
 }
 
-func (auth *CertAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *CertAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 || len(req.TLS.VerifiedChains[0]) < 1 {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 		return "", false
@@ -75,6 +83,9 @@ func (auth *CertAuth) Validate(_ context.Context, wr http.ResponseWriter, req *h
 	if auth.blacklist.Load().file.Has(eeCert.SerialNumber) {
 		http.Error(wr, BAD_REQ_MSG, http.StatusBadRequest)
 		return "", false
+	}
+	if auth.next != nil {
+		return auth.next.Validate(ctx, wr, req)
 	}
 	return fmt.Sprintf(
 		"Subject: %s, Serial Number: %s",
