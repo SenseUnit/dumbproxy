@@ -412,6 +412,9 @@ Supported proxy schemes are:
 * `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cache://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
    * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
    * `ttl` - time to live for cache record. Examples: `15s`, `2m`, `1h`.
+* `force-resolve` - pseudo-proxy forcing domain name resolve before it will be passed to the next proxy in the chain. Must wrap actual proxy dialer in the chain (i.e. be specified in last `-proxy` argument). Example: `force-resolve://`
+* `chain` - pseudo-proxy assembling a chain from other proxy specifications. Query string parameters are:
+  * `next` - specification of the next proxy in chain. This query string parameter can be specified more than once. Example: `chain://?next=http%3A%2F%2F127.0.0.1%3A57800&next=force-resolve%3A%2F%2F`.
 
 ## Configuration files
 

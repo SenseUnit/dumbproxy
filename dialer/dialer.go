@@ -24,6 +24,10 @@ func init() {
 	xproxy.RegisterDialerType("cached", GetCachedDialer)
 	xproxy.RegisterDialerType("socks5s", SOCKS5SDialerFromURL)
 	xproxy.RegisterDialerType("socks5hs", SOCKS5SDialerFromURL)
+	xproxy.RegisterDialerType("force-resolve", func(_ *url.URL, d xproxy.Dialer) (xproxy.Dialer, error) {
+		return NeverRequireHostname(MaybeWrapWithContextDialer(d)), nil
+	})
+	xproxy.RegisterDialerType("chain", ChainFromURL)
 }
 
 type LegacyDialer interface {

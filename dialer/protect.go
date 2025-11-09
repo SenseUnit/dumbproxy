@@ -10,12 +10,21 @@ type HostnameWanter interface {
 }
 
 type WrappedHostnameDialer struct {
-	Dialer Dialer
+	Dialer             Dialer
+	WantsHostnameValue bool
 }
 
 func AlwaysRequireHostname(d Dialer) Dialer {
 	return WrappedHostnameDialer{
-		Dialer: d,
+		Dialer:             d,
+		WantsHostnameValue: true,
+	}
+}
+
+func NeverRequireHostname(d Dialer) Dialer {
+	return WrappedHostnameDialer{
+		Dialer:             d,
+		WantsHostnameValue: false,
 	}
 }
 
@@ -28,7 +37,7 @@ func (w WrappedHostnameDialer) Dial(network, address string) (net.Conn, error) {
 }
 
 func (w WrappedHostnameDialer) WantsHostname(_ context.Context, _, _ string) bool {
-	return true
+	return w.WantsHostnameValue
 }
 
 var _ Dialer = WrappedHostnameDialer{}
