@@ -413,6 +413,8 @@ Supported proxy schemes are:
    * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
    * `ttl` - time to live for cache record. Examples: `15s`, `2m`, `1h`.
 * `force-resolve` - pseudo-proxy forcing domain name resolve before it will be passed to the next proxy in the chain. Must wrap actual proxy dialer in the chain (i.e. be specified in last `-proxy` argument). Example: `force-resolve://`
+* `chain` - pseudo-proxy assembling a chain from other proxy specifications. Query string parameters are:
+  * `next` - specification of the next proxy in chain. This query string parameter can be specified more than once. Example: `chain://?next=http%3A%2F%2F127.0.0.1%3A57800&next=force-resolve%3A%2F%2F`.
 
 ## Configuration files
 
