@@ -23,6 +23,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -50,10 +51,7 @@ import (
 	_ "golang.org/x/crypto/x509roots/fallback"
 )
 
-var (
-	home, _ = os.UserHomeDir()
-	version = "undefined"
-)
+var home, _ = os.UserHomeDir()
 
 func perror(msg string) {
 	fmt.Fprintln(os.Stderr, "")
@@ -480,7 +478,7 @@ func run() int {
 
 	// handle special invocation modes
 	if args.showVersion {
-		fmt.Println(version)
+		fmt.Println(version())
 		return 0
 	}
 
@@ -1107,6 +1105,14 @@ func readConfig(filename string) error {
 		}
 	}
 	return nil
+}
+
+func version() string {
+	bi, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "unknown"
+	}
+	return bi.Main.Version
 }
 
 func main() {

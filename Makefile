@@ -1,9 +1,8 @@
 PROGNAME = dumbproxy
 OUTSUFFIX = bin/$(PROGNAME)
-VERSION := $(shell git describe)
 BUILDOPTS = -a -tags netgo -trimpath -asmflags -trimpath
-LDFLAGS = -ldflags '-s -w -extldflags "-static" -X main.version=$(VERSION)'
-LDFLAGS_NATIVE = -ldflags '-s -w -X main.version=$(VERSION)'
+LDFLAGS = -ldflags '-s -w -extldflags "-static"'
+LDFLAGS_NATIVE = -ldflags '-s -w'
 
 NDK_CC_ARM = $(abspath ../../ndk-toolchain-arm/bin/arm-linux-androideabi-gcc)
 NDK_CC_ARM64 = $(abspath ../../ndk-toolchain-arm64/bin/aarch64-linux-android21-clang)
