@@ -56,8 +56,6 @@ func Every(interval time.Duration) Limit {
 // Limiter is safe for simultaneous use by multiple goroutines.
 type Limiter struct {
 	mu     sync.Mutex
-	limit  Limit
-	burst  int64
 	tokens float64
 	// last is the last time the limiter's tokens field was updated
 	last int64
@@ -65,56 +63,37 @@ type Limiter struct {
 	lastEvent int64
 }
 
-// Limit returns the maximum overall event rate.
-func (lim *Limiter) Limit() Limit {
-	lim.mu.Lock()
-	defer lim.mu.Unlock()
-	return lim.limit
-}
-
-// Burst returns the maximum burst size. Burst is the maximum number of tokens
-// that can be consumed in a single call to Allow, Reserve, or Wait, so higher
-// Burst values allow more events to happen at once.
-// A zero Burst allows no events, unless limit == Inf.
-func (lim *Limiter) Burst() int64 {
-	lim.mu.Lock()
-	defer lim.mu.Unlock()
-	return lim.burst
-}
-
 // TokensAt returns the number of tokens available at time t.
-func (lim *Limiter) TokensAt(t time.Time) float64 {
+func (lim *Limiter) TokensAt(limit Limit, burst int64, t time.Time) float64 {
 	lim.mu.Lock()
-	tokens := lim.advance(t) // does not mutate lim
+	tokens := lim.advance(limit, burst, t) // does not mutate lim
 	lim.mu.Unlock()
 	return tokens
 }
 
 // Tokens returns the number of tokens available now.
-func (lim *Limiter) Tokens() float64 {
-	return lim.TokensAt(time.Now())
+func (lim *Limiter) Tokens(limit Limit, burst int64) float64 {
+	return lim.TokensAt(limit, burst, time.Now())
 }
 
 // NewLimiter returns a new Limiter that allows events up to rate r and permits
 // bursts of at most b tokens.
-func NewLimiter(r Limit, b int64) *Limiter {
+func NewLimiter(b int64) *Limiter {
 	return &Limiter{
-		limit:  r,
-		burst:  b,
 		tokens: float64(b),
 	}
 }
 
 // Allow reports whether an event may happen now.
-func (lim *Limiter) Allow() bool {
-	return lim.AllowN(time.Now(), 1)
+func (lim *Limiter) Allow(limit Limit, burst int64) bool {
+	return lim.AllowN(limit, burst, time.Now(), 1)
 }
 
 // AllowN reports whether n events may happen at time t.
 // Use this method if you intend to drop / skip events that exceed the rate limit.
 // Otherwise use Reserve or Wait.
-func (lim *Limiter) AllowN(t time.Time, n int64) bool {
-	return lim.reserveN(t, n, 0).ok
+func (lim *Limiter) AllowN(limit Limit, burst int64, t time.Time, n int64) bool {
+	return lim.reserveN(limit, burst, t, n, 0).ok
 }
 
 // A Reservation holds information about events that are permitted by a Limiter to happen after a delay.
@@ -159,14 +138,14 @@ func (r *Reservation) DelayFrom(t time.Time) time.Duration {
 }
 
 // Cancel is shorthand for CancelAt(time.Now()).
-func (r *Reservation) Cancel() {
-	r.CancelAt(time.Now())
+func (r *Reservation) Cancel(limit Limit, burst int64) {
+	r.CancelAt(limit, burst, time.Now())
 }
 
 // CancelAt indicates that the reservation holder will not perform the reserved action
 // and reverses the effects of this Reservation on the rate limit as much as possible,
 // considering that other reservations may have already been made.
-func (r *Reservation) CancelAt(t time.Time) {
+func (r *Reservation) CancelAt(limit Limit, burst int64, t time.Time) {
 	if !r.ok {
 		return
 	}
@@ -174,22 +153,22 @@ func (r *Reservation) CancelAt(t time.Time) {
 	r.lim.mu.Lock()
 	defer r.lim.mu.Unlock()
 
-	if r.lim.limit == Inf || r.tokens == 0 || time.Unix(0, r.timeToAct).Before(t) {
+	if limit == Inf || r.tokens == 0 || time.Unix(0, r.timeToAct).Before(t) {
 		return
 	}
 
 	// calculate tokens to restore
 	// The duration between lim.lastEvent and r.timeToAct tells us how many tokens were reserved
 	// after r was obtained. These tokens should not be restored.
-	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(time.Duration(r.lim.lastEvent - r.timeToAct))
+	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(time.Duration(r.lim.lastEvent-r.timeToAct))
 	if restoreTokens <= 0 {
 		return
 	}
 	// advance time to now
-	tokens := r.lim.advance(t)
+	tokens := r.lim.advance(limit, burst, t)
 	// calculate new number of tokens
 	tokens += restoreTokens
-	if burst := float64(r.lim.burst); tokens > burst {
+	if burst := float64(burst); tokens > burst {
 		tokens = burst
 	}
 	// update state
@@ -204,8 +183,8 @@ func (r *Reservation) CancelAt(t time.Time) {
 }
 
 // Reserve is shorthand for ReserveN(time.Now(), 1).
-func (lim *Limiter) Reserve() *Reservation {
-	return lim.ReserveN(time.Now(), 1)
+func (lim *Limiter) Reserve(limit Limit, burst int64) *Reservation {
+	return lim.ReserveN(limit, burst, time.Now(), 1)
 }
 
 // ReserveN returns a Reservation that indicates how long the caller must wait before n events happen.
@@ -224,21 +203,21 @@ func (lim *Limiter) Reserve() *Reservation {
 // Use this method if you wish to wait and slow down in accordance with the rate limit without dropping events.
 // If you need to respect a deadline or cancel the delay, use Wait instead.
 // To drop or skip events exceeding rate limit, use Allow instead.
-func (lim *Limiter) ReserveN(t time.Time, n int64) *Reservation {
-	r := lim.reserveN(t, n, InfDuration)
+func (lim *Limiter) ReserveN(limit Limit, burst int64, t time.Time, n int64) *Reservation {
+	r := lim.reserveN(limit, burst, t, n, InfDuration)
 	return &r
 }
 
 // Wait is shorthand for WaitN(ctx, 1).
-func (lim *Limiter) Wait(ctx context.Context) (err error) {
-	return lim.WaitN(ctx, 1)
+func (lim *Limiter) Wait(ctx context.Context, limit Limit, burst int64) (err error) {
+	return lim.WaitN(ctx, limit, burst, 1)
 }
 
 // WaitN blocks until lim permits n events to happen.
 // It returns an error if n exceeds the Limiter's burst size, the Context is
 // canceled, or the expected wait time exceeds the Context's Deadline.
 // The burst limit is ignored if the rate limit is Inf.
-func (lim *Limiter) WaitN(ctx context.Context, n int64) (err error) {
+func (lim *Limiter) WaitN(ctx context.Context, limit Limit, burst int64, n int64) (err error) {
 	// The test code calls lim.wait with a fake timer generator.
 	// This is the real timer generator.
 	newTimer := func(d time.Duration) (<-chan time.Time, func() bool, func()) {
@@ -246,16 +225,11 @@ func (lim *Limiter) WaitN(ctx context.Context, n int64) (err error) {
 		return timer.C, timer.Stop, func() {}
 	}
 
-	return lim.wait(ctx, n, time.Now(), newTimer)
+	return lim.wait(ctx, limit, burst, n, time.Now(), newTimer)
 }
 
 // wait is the internal implementation of WaitN.
-func (lim *Limiter) wait(ctx context.Context, n int64, t time.Time, newTimer func(d time.Duration) (<-chan time.Time, func() bool, func())) error {
-	lim.mu.Lock()
-	burst := lim.burst
-	limit := lim.limit
-	lim.mu.Unlock()
-
+func (lim *Limiter) wait(ctx context.Context, limit Limit, burst int64, n int64, t time.Time, newTimer func(d time.Duration) (<-chan time.Time, func() bool, func())) error {
 	if n > burst && limit != Inf {
 		return fmt.Errorf("rate: Wait(n=%d) exceeds limiter's burst %d", n, burst)
 	}
@@ -271,7 +245,7 @@ func (lim *Limiter) wait(ctx context.Context, n int64, t time.Time, newTimer fun
 		waitLimit = deadline.Sub(t)
 	}
 	// Reserve
-	r := lim.reserveN(t, n, waitLimit)
+	r := lim.reserveN(limit, burst, t, n, waitLimit)
 	if !r.ok {
 		return fmt.Errorf("rate: Wait(n=%d) would exceed context deadline", n)
 	}
@@ -290,55 +264,19 @@ func (lim *Limiter) wait(ctx context.Context, n int64, t time.Time, newTimer fun
 	case <-ctx.Done():
 		// Context was canceled before we could proceed.  Cancel the
 		// reservation, which may permit other events to proceed sooner.
-		r.Cancel()
+		r.Cancel(limit, burst)
 		return ctx.Err()
 	}
-}
-
-// SetLimit is shorthand for SetLimitAt(time.Now(), newLimit).
-func (lim *Limiter) SetLimit(newLimit Limit) {
-	lim.SetLimitAt(time.Now(), newLimit)
-}
-
-// SetLimitAt sets a new Limit for the limiter. The new Limit, and Burst, may be violated
-// or underutilized by those which reserved (using Reserve or Wait) but did not yet act
-// before SetLimitAt was called.
-func (lim *Limiter) SetLimitAt(t time.Time, newLimit Limit) {
-	lim.mu.Lock()
-	defer lim.mu.Unlock()
-
-	tokens := lim.advance(t)
-
-	lim.last = t.UnixNano()
-	lim.tokens = tokens
-	lim.limit = newLimit
-}
-
-// SetBurst is shorthand for SetBurstAt(time.Now(), newBurst).
-func (lim *Limiter) SetBurst(newBurst int64) {
-	lim.SetBurstAt(time.Now(), newBurst)
-}
-
-// SetBurstAt sets a new burst size for the limiter.
-func (lim *Limiter) SetBurstAt(t time.Time, newBurst int64) {
-	lim.mu.Lock()
-	defer lim.mu.Unlock()
-
-	tokens := lim.advance(t)
-
-	lim.last = t.UnixNano()
-	lim.tokens = tokens
-	lim.burst = newBurst
 }
 
 // reserveN is a helper method for AllowN, ReserveN, and WaitN.
 // maxFutureReserve specifies the maximum reservation wait duration allowed.
 // reserveN returns Reservation, not *Reservation, to avoid allocation in AllowN and WaitN.
-func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duration) Reservation {
+func (lim *Limiter) reserveN(limit Limit, burst int64, t time.Time, n int64, maxFutureReserve time.Duration) Reservation {
 	lim.mu.Lock()
 	defer lim.mu.Unlock()
 
-	if lim.limit == Inf {
+	if limit == Inf {
 		return Reservation{
 			ok:        true,
 			lim:       lim,
@@ -347,7 +285,7 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 		}
 	}
 
-	tokens := lim.advance(t)
+	tokens := lim.advance(limit, burst, t)
 
 	// Calculate the remaining number of tokens resulting from the request.
 	tokens -= float64(n)
@@ -355,17 +293,17 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 	// Calculate the wait duration
 	var waitDuration time.Duration
 	if tokens < 0 {
-		waitDuration = lim.limit.durationFromTokens(-tokens)
+		waitDuration = limit.durationFromTokens(-tokens)
 	}
 
 	// Decide result
-	ok := n <= lim.burst && waitDuration <= maxFutureReserve
+	ok := n <= burst && waitDuration <= maxFutureReserve
 
 	// Prepare reservation
 	r := Reservation{
 		ok:    ok,
 		lim:   lim,
-		limit: lim.limit,
+		limit: limit,
 	}
 	if ok {
 		r.tokens = n
@@ -384,7 +322,7 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 // resulting from the passage of time.
 // lim is not changed.
 // advance requires that lim.mu is held.
-func (lim *Limiter) advance(t time.Time) (newTokens float64) {
+func (lim *Limiter) advance(limit Limit, burst int64, t time.Time) (newTokens float64) {
 	last := time.Unix(0, lim.last)
 	if t.Before(last) {
 		last = t
@@ -392,9 +330,9 @@ func (lim *Limiter) advance(t time.Time) (newTokens float64) {
 
 	// Calculate the new number of tokens, due to time that passed.
 	elapsed := t.Sub(last)
-	delta := lim.limit.tokensFromDuration(elapsed)
+	delta := limit.tokensFromDuration(elapsed)
 	tokens := lim.tokens + delta
-	if burst := float64(lim.burst); tokens > burst {
+	if burst := float64(burst); tokens > burst {
 		tokens = burst
 	}
 	return tokens
