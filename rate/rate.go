@@ -60,9 +60,9 @@ type Limiter struct {
 	burst  int64
 	tokens float64
 	// last is the last time the limiter's tokens field was updated
-	last time.Time
+	last int64
 	// lastEvent is the latest time of a rate-limited event (past or future)
-	lastEvent time.Time
+	lastEvent int64
 }
 
 // Limit returns the maximum overall event rate.
@@ -123,7 +123,7 @@ type Reservation struct {
 	ok        bool
 	lim       *Limiter
 	tokens    int64
-	timeToAct time.Time
+	timeToAct int64
 	// This is the Limit at reservation time, it can change later.
 	limit Limit
 }
@@ -151,7 +151,7 @@ func (r *Reservation) DelayFrom(t time.Time) time.Duration {
 	if !r.ok {
 		return InfDuration
 	}
-	delay := r.timeToAct.Sub(t)
+	delay := time.Unix(0, r.timeToAct).Sub(t)
 	if delay < 0 {
 		return 0
 	}
@@ -174,14 +174,14 @@ func (r *Reservation) CancelAt(t time.Time) {
 	r.lim.mu.Lock()
 	defer r.lim.mu.Unlock()
 
-	if r.lim.limit == Inf || r.tokens == 0 || r.timeToAct.Before(t) {
+	if r.lim.limit == Inf || r.tokens == 0 || time.Unix(0, r.timeToAct).Before(t) {
 		return
 	}
 
 	// calculate tokens to restore
 	// The duration between lim.lastEvent and r.timeToAct tells us how many tokens were reserved
 	// after r was obtained. These tokens should not be restored.
-	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(r.lim.lastEvent.Sub(r.timeToAct))
+	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(time.Duration(r.lim.lastEvent - r.timeToAct))
 	if restoreTokens <= 0 {
 		return
 	}
@@ -193,12 +193,12 @@ func (r *Reservation) CancelAt(t time.Time) {
 		tokens = burst
 	}
 	// update state
-	r.lim.last = t
+	r.lim.last = t.UnixNano()
 	r.lim.tokens = tokens
-	if r.timeToAct.Equal(r.lim.lastEvent) {
-		prevEvent := r.timeToAct.Add(r.limit.durationFromTokens(float64(-r.tokens)))
+	if r.timeToAct == r.lim.lastEvent {
+		prevEvent := time.Unix(0, r.timeToAct).Add(r.limit.durationFromTokens(float64(-r.tokens)))
 		if !prevEvent.Before(t) {
-			r.lim.lastEvent = prevEvent
+			r.lim.lastEvent = prevEvent.UnixNano()
 		}
 	}
 }
@@ -309,7 +309,7 @@ func (lim *Limiter) SetLimitAt(t time.Time, newLimit Limit) {
 
 	tokens := lim.advance(t)
 
-	lim.last = t
+	lim.last = t.UnixNano()
 	lim.tokens = tokens
 	lim.limit = newLimit
 }
@@ -326,7 +326,7 @@ func (lim *Limiter) SetBurstAt(t time.Time, newBurst int64) {
 
 	tokens := lim.advance(t)
 
-	lim.last = t
+	lim.last = t.UnixNano()
 	lim.tokens = tokens
 	lim.burst = newBurst
 }
@@ -343,7 +343,7 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 			ok:        true,
 			lim:       lim,
 			tokens:    n,
-			timeToAct: t,
+			timeToAct: t.UnixNano(),
 		}
 	}
 
@@ -369,10 +369,10 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 	}
 	if ok {
 		r.tokens = n
-		r.timeToAct = t.Add(waitDuration)
+		r.timeToAct = t.Add(waitDuration).UnixNano()
 
 		// Update state
-		lim.last = t
+		lim.last = t.UnixNano()
 		lim.tokens = tokens
 		lim.lastEvent = r.timeToAct
 	}
@@ -385,7 +385,7 @@ func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duratio
 // lim is not changed.
 // advance requires that lim.mu is held.
 func (lim *Limiter) advance(t time.Time) (newTokens float64) {
-	last := lim.last
+	last := time.Unix(0, lim.last)
 	if t.Before(last) {
 		last = t
 	}

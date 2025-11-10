@@ -333,9 +333,9 @@ func runReserve(t *testing.T, lim *Limiter, req request) *Reservation {
 func runReserveMax(t *testing.T, lim *Limiter, req request, maxReserve time.Duration) *Reservation {
 	t.Helper()
 	r := lim.reserveN(req.t, req.n, maxReserve)
-	if r.ok && (dSince(r.timeToAct) != dSince(req.act)) || r.ok != req.ok {
+	if r.ok && (dSince(time.Unix(0, r.timeToAct)) != dSince(req.act)) || r.ok != req.ok {
 		t.Errorf("lim.reserveN(t%d, %v, %v) = (t%d, %v) want (t%d, %v)",
-			dSince(req.t), req.n, maxReserve, dSince(r.timeToAct), r.ok, dSince(req.act), req.ok)
+			dSince(req.t), req.n, maxReserve, dSince(time.Unix(0, r.timeToAct)), r.ok, dSince(req.act), req.ok)
 	}
 	return &r
 }
