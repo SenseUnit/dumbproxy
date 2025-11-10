@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/zeebo/xxh3"
-	"golang.org/x/time/rate"
+
+	"github.com/SenseUnit/dumbproxy/rate"
 )
 
 const copyChunkSize = 128 * 1024
