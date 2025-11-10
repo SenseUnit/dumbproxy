@@ -67,7 +67,7 @@ var (
 type allow struct {
 	t    time.Time
 	toks float64
-	n    int
+	n    int64
 	ok   bool
 }
 
@@ -304,7 +304,7 @@ func TestLongRunningQPS(t *testing.T) {
 // A request provides the arguments to lim.reserveN(t, n) and the expected results (act, ok).
 type request struct {
 	t   time.Time
-	n   int
+	n   int64
 	act time.Time
 	ok  bool
 }
@@ -482,7 +482,7 @@ func TestReserveMax(t *testing.T) {
 type wait struct {
 	name   string
 	ctx    context.Context
-	n      int
+	n      int64
 	delay  int // in multiples of d
 	nilErr bool
 }
@@ -600,7 +600,7 @@ func BenchmarkAllowN(b *testing.B) {
 }
 
 func BenchmarkWaitNNoDelay(b *testing.B) {
-	lim := NewLimiter(Limit(b.N), b.N)
+	lim := NewLimiter(Limit(b.N), int64(b.N))
 	ctx := context.Background()
 	b.ReportAllocs()
 	b.ResetTimer()

@@ -57,7 +57,7 @@ func Every(interval time.Duration) Limit {
 type Limiter struct {
 	mu     sync.Mutex
 	limit  Limit
-	burst  int
+	burst  int64
 	tokens float64
 	// last is the last time the limiter's tokens field was updated
 	last time.Time
@@ -76,7 +76,7 @@ func (lim *Limiter) Limit() Limit {
 // that can be consumed in a single call to Allow, Reserve, or Wait, so higher
 // Burst values allow more events to happen at once.
 // A zero Burst allows no events, unless limit == Inf.
-func (lim *Limiter) Burst() int {
+func (lim *Limiter) Burst() int64 {
 	lim.mu.Lock()
 	defer lim.mu.Unlock()
 	return lim.burst
@@ -97,7 +97,7 @@ func (lim *Limiter) Tokens() float64 {
 
 // NewLimiter returns a new Limiter that allows events up to rate r and permits
 // bursts of at most b tokens.
-func NewLimiter(r Limit, b int) *Limiter {
+func NewLimiter(r Limit, b int64) *Limiter {
 	return &Limiter{
 		limit:  r,
 		burst:  b,
@@ -113,7 +113,7 @@ func (lim *Limiter) Allow() bool {
 // AllowN reports whether n events may happen at time t.
 // Use this method if you intend to drop / skip events that exceed the rate limit.
 // Otherwise use Reserve or Wait.
-func (lim *Limiter) AllowN(t time.Time, n int) bool {
+func (lim *Limiter) AllowN(t time.Time, n int64) bool {
 	return lim.reserveN(t, n, 0).ok
 }
 
@@ -122,7 +122,7 @@ func (lim *Limiter) AllowN(t time.Time, n int) bool {
 type Reservation struct {
 	ok        bool
 	lim       *Limiter
-	tokens    int
+	tokens    int64
 	timeToAct time.Time
 	// This is the Limit at reservation time, it can change later.
 	limit Limit
@@ -224,7 +224,7 @@ func (lim *Limiter) Reserve() *Reservation {
 // Use this method if you wish to wait and slow down in accordance with the rate limit without dropping events.
 // If you need to respect a deadline or cancel the delay, use Wait instead.
 // To drop or skip events exceeding rate limit, use Allow instead.
-func (lim *Limiter) ReserveN(t time.Time, n int) *Reservation {
+func (lim *Limiter) ReserveN(t time.Time, n int64) *Reservation {
 	r := lim.reserveN(t, n, InfDuration)
 	return &r
 }
@@ -238,7 +238,7 @@ func (lim *Limiter) Wait(ctx context.Context) (err error) {
 // It returns an error if n exceeds the Limiter's burst size, the Context is
 // canceled, or the expected wait time exceeds the Context's Deadline.
 // The burst limit is ignored if the rate limit is Inf.
-func (lim *Limiter) WaitN(ctx context.Context, n int) (err error) {
+func (lim *Limiter) WaitN(ctx context.Context, n int64) (err error) {
 	// The test code calls lim.wait with a fake timer generator.
 	// This is the real timer generator.
 	newTimer := func(d time.Duration) (<-chan time.Time, func() bool, func()) {
@@ -250,7 +250,7 @@ func (lim *Limiter) WaitN(ctx context.Context, n int) (err error) {
 }
 
 // wait is the internal implementation of WaitN.
-func (lim *Limiter) wait(ctx context.Context, n int, t time.Time, newTimer func(d time.Duration) (<-chan time.Time, func() bool, func())) error {
+func (lim *Limiter) wait(ctx context.Context, n int64, t time.Time, newTimer func(d time.Duration) (<-chan time.Time, func() bool, func())) error {
 	lim.mu.Lock()
 	burst := lim.burst
 	limit := lim.limit
@@ -315,12 +315,12 @@ func (lim *Limiter) SetLimitAt(t time.Time, newLimit Limit) {
 }
 
 // SetBurst is shorthand for SetBurstAt(time.Now(), newBurst).
-func (lim *Limiter) SetBurst(newBurst int) {
+func (lim *Limiter) SetBurst(newBurst int64) {
 	lim.SetBurstAt(time.Now(), newBurst)
 }
 
 // SetBurstAt sets a new burst size for the limiter.
-func (lim *Limiter) SetBurstAt(t time.Time, newBurst int) {
+func (lim *Limiter) SetBurstAt(t time.Time, newBurst int64) {
 	lim.mu.Lock()
 	defer lim.mu.Unlock()
 
@@ -334,7 +334,7 @@ func (lim *Limiter) SetBurstAt(t time.Time, newBurst int) {
 // reserveN is a helper method for AllowN, ReserveN, and WaitN.
 // maxFutureReserve specifies the maximum reservation wait duration allowed.
 // reserveN returns Reservation, not *Reservation, to avoid allocation in AllowN and WaitN.
-func (lim *Limiter) reserveN(t time.Time, n int, maxFutureReserve time.Duration) Reservation {
+func (lim *Limiter) reserveN(t time.Time, n int64, maxFutureReserve time.Duration) Reservation {
 	lim.mu.Lock()
 	defer lim.mu.Unlock()
 
