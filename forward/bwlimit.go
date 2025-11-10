@@ -7,21 +7,25 @@ import (
 	"time"
 
 	"github.com/zeebo/xxh3"
-	"golang.org/x/time/rate"
+
+	"github.com/SenseUnit/dumbproxy/rate"
 )
 
 const copyChunkSize = 128 * 1024
 
 type BWLimit struct {
-	d []rate.Limiter
-	u []rate.Limiter
+	limit rate.Limit
+	burst int64
+	d     []rate.Limiter
+	u     []rate.Limiter
 }
 
 func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool) *BWLimit {
 	if buckets == 0 {
 		buckets = 1
 	}
-	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), max(copyChunkSize, burst)))
+	burst = max(copyChunkSize, burst)
+	lim := *(rate.NewLimiter(burst))
 	d := make([]rate.Limiter, buckets)
 	for i := range d {
 		d[i] = lim
@@ -34,8 +38,10 @@ func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool
 		}
 	}
 	return &BWLimit{
-		d: d,
-		u: u,
+		limit: rate.Limit(bytesPerSecond),
+		burst: burst,
+		d:     d,
+		u:     u,
 	}
 }
 
@@ -47,7 +53,7 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 	var n int64
 	for {
 		t := time.Now()
-		r := rl.ReserveN(t, copyChunkSize)
+		r := rl.ReserveN(l.limit, l.burst, t, copyChunkSize)
 		if !r.OK() {
 			err = errors.New("can't get rate limit reservation")
 			return
@@ -64,9 +70,9 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 		n, err = io.Copy(dst, lim)
 		written += n
 		if n < copyChunkSize {
-			r.CancelAt(t)
+			r.CancelAt(l.limit, l.burst, t)
 			if n > 0 {
-				rl.ReserveN(t, n)
+				rl.ReserveN(l.limit, l.burst, t, n)
 			}
 		}
 		if err != nil {

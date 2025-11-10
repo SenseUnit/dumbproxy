@@ -21,7 +21,6 @@ require (
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20251028130051-c0531f9c3451
 	golang.org/x/net v0.46.0
 	golang.org/x/sync v0.18.0
-	golang.org/x/time v0.14.0
 )
 
 require (
@@ -40,5 +39,3 @@ require (
 	golang.org/x/term v0.36.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
 )
-
-replace golang.org/x/time => github.com/Snawoot/xtime v0.0.0-20250501122004-d1ce456948bb
