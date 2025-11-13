@@ -43,6 +43,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
   * Access filter by JS function
   * Upstream proxy selection by JS function
 * Seamless proxy client integration with OpenSSH: `ssh -o ProxyCommand="dumbproxy -config proxy.cfg -mode stdio %h %p" root@server1`
+* Port-forwarding mode
 
 ## Installation
 
