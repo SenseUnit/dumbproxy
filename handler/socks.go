@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"strings"
 	"sync"
 
@@ -71,4 +72,10 @@ func SOCKSHandler(dialer HandlerDialer, logger *clog.CondLogger, forward Forward
 
 		return forward(ctx, username, wrapSOCKS(request.Reader, writer), target)
 	}
+}
+
+type DummySocksResolver struct{}
+
+func (_ DummySocksResolver) Resolve(ctx context.Context, name string) (context.Context, net.IP, error) {
+	return ctx, nil, nil
 }
