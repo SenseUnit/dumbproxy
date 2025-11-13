@@ -870,6 +870,7 @@ func run() int {
 					forwarder,
 				),
 			),
+			socks5.WithResolver(handler.DummySocksResolver{}),
 		}
 		switch cs := authProvider.(type) {
 		case auth.NoAuth:
