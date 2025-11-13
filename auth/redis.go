@@ -3,10 +3,12 @@ package auth
 import (
 	"context"
 	"encoding/base64"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
@@ -14,11 +16,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type cmdableCloser interface {
+	redis.Cmdable
+	io.Closer
+}
+
 type RedisAuth struct {
 	logger       *clog.CondLogger
 	hiddenDomain string
-	r            redis.Cmdable
+	r            cmdableCloser
 	keyPrefix    string
+	stopOnce     sync.Once
 }
 
 func NewRedisAuth(param_url *url.URL, cluster bool, logger *clog.CondLogger) (*RedisAuth, error) {
@@ -125,4 +133,7 @@ func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req
 }
 
 func (auth *RedisAuth) Stop() {
+	auth.stopOnce.Do(func() {
+		auth.r.Close()
+	})
 }
