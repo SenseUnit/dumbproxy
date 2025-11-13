@@ -216,6 +216,7 @@ const (
 	proxyModeHTTP
 	proxyModeSOCKS5
 	proxyModeStdIO
+	proxyModePortForward
 )
 
 type proxyModeArg struct {
@@ -231,6 +232,8 @@ func (a *proxyModeArg) Set(arg string) error {
 		val = proxyModeSOCKS5
 	case "stdio":
 		val = proxyModeStdIO
+	case "port-forward":
+		val = proxyModePortForward
 	default:
 		return fmt.Errorf("unrecognized proxy mode %q", arg)
 	}
@@ -246,6 +249,8 @@ func (a *proxyModeArg) String() string {
 		return "socks5"
 	case proxyModeStdIO:
 		return "stdio"
+	case proxyModePortForward:
+		return "port-forward"
 	default:
 		return fmt.Sprintf("proxyMode(%d)", int(a.value))
 	}
@@ -382,7 +387,7 @@ func parse_args() *CLIArgs {
 	})
 	flag.BoolVar(&args.unixSockUnlink, "unix-sock-unlink", true, "delete file object located at Unix domain socket bind path before binding")
 	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
-	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5/stdio)")
+	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5/stdio/port-forward)")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
@@ -513,12 +518,13 @@ func run() int {
 		return 0
 	}
 
-	if args.mode.value == proxyModeStdIO {
+	switch args.mode.value {
+	case proxyModeStdIO, proxyModePortForward:
 		// expect exactly two positional arguments
 		if len(args.positionalArgs) != 2 {
 			arg_fail("Exactly two positional arguments are expected in this mode: host and port")
 		}
-	} else {
+	default:
 		// we don't expect positional arguments in the main operation mode
 		if len(args.positionalArgs) > 0 {
 			arg_fail("Unexpected positional arguments! Check your command line.")
@@ -882,8 +888,15 @@ func run() int {
 		}()
 		server := socks5.NewServer(opts...)
 		if err := server.Serve(listener); err != nil {
-			mainLogger.Info("Reached normal server termination.")
+			if errors.Is(err, net.ErrClosed) {
+				mainLogger.Info("Reached normal server termination.")
+				return 0
+			} else {
+				mainLogger.Critical("Server failure: %v", err)
+				return 1
+			}
 		}
+		mainLogger.Info("Reached normal server termination.")
 		return 0
 	case proxyModeStdIO:
 		handler := handler.StdIOHandler(dialerRoot, proxyLogger, forwarder)
@@ -891,6 +904,34 @@ func run() int {
 		if err := handler(stopContext, os.Stdin, os.Stdout, address); err != nil {
 			mainLogger.Error("Connection interrupted: %v", err)
 		}
+		return 0
+	case proxyModePortForward:
+		logger := clog.NewCondLogger(log.New(logWriter, "PORT-FWD: ",
+			log.LstdFlags|log.Lshortfile),
+			args.verbosity)
+		address := net.JoinHostPort(args.positionalArgs[0], args.positionalArgs[1])
+		streamHandler := handler.PortForwardHandler(logger, dialerRoot, address, forwarder)
+		connHandler := func(c net.Conn) {
+			ctx, cl := context.WithCancel(stopContext)
+			defer cl()
+			streamHandler(ctx, c)
+		}
+
+		go func() {
+			<-stopContext.Done()
+			mainLogger.Info("Shutting down...")
+			listener.Close()
+		}()
+		if err := handler.StreamServe(listener, connHandler); err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				mainLogger.Info("Reached normal server termination.")
+				return 0
+			} else {
+				mainLogger.Critical("Server failure: %v", err)
+				return 1
+			}
+		}
+		mainLogger.Info("Reached normal server termination.")
 		return 0
 	}
 
