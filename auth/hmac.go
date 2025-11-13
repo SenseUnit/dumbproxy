@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
@@ -30,6 +31,8 @@ type HMACAuth struct {
 	secret       []byte
 	hiddenDomain string
 	logger       *clog.CondLogger
+	stopOnce     sync.Once
+	next         Auth
 }
 
 func NewHMACAuth(param_url *url.URL, logger *clog.CondLogger) (*HMACAuth, error) {
@@ -52,11 +55,21 @@ func NewHMACAuth(param_url *url.URL, logger *clog.CondLogger) (*HMACAuth, error)
 		return nil, fmt.Errorf("can't hex-decode HMAC secret: %w", err)
 	}
 
-	return &HMACAuth{
+	auth := &HMACAuth{
 		secret:       secret,
 		logger:       logger,
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
-	}, nil
+	}
+
+	if nextAuth := values.Get("else"); nextAuth != "" {
+		nap, err := NewAuth(nextAuth, logger)
+		if err != nil {
+			return nil, fmt.Errorf("chained auth provider construction failed: %w", err)
+		}
+		auth.next = nap
+	}
+
+	return auth, nil
 }
 
 type HMACToken struct {
@@ -85,32 +98,28 @@ func VerifyHMACLoginAndPassword(secret []byte, login, password string) bool {
 }
 
 func (auth *HMACAuth) Valid(user, password, userAddr string) bool {
-	return VerifyHMACLoginAndPassword(auth.secret, user, password)
+	return VerifyHMACLoginAndPassword(auth.secret, user, password) || tryValid(auth.next, auth.logger, user, password, userAddr)
 }
 
-func (auth *HMACAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *HMACAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 	hdr_parts := strings.SplitN(hdr, " ", 2)
 	if len(hdr_parts) != 2 || strings.ToLower(hdr_parts[0]) != "basic" {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	token := hdr_parts[1]
 	data, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	pair := strings.SplitN(string(data), ":", 2)
 	if len(pair) != 2 {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	login := pair[0]
@@ -131,11 +140,15 @@ func (auth *HMACAuth) Validate(_ context.Context, wr http.ResponseWriter, req *h
 			return login, true
 		}
 	}
-	requireBasicAuth(wr, req, auth.hiddenDomain)
-	return "", false
+	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
 func (auth *HMACAuth) Stop() {
+	auth.stopOnce.Do(func() {
+		if auth.next != nil {
+			auth.next.Stop()
+		}
+	})
 }
 
 func CalculateHMACSignature(secret []byte, username string, expire int64) []byte {

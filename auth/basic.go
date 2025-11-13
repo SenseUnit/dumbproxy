@@ -29,6 +29,7 @@ type BasicAuth struct {
 	hiddenDomain string
 	stopOnce     sync.Once
 	stopChan     chan struct{}
+	next         Auth
 }
 
 func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, error) {
@@ -62,6 +63,14 @@ func NewBasicFileAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, 
 	}
 	if reloadInterval > 0 {
 		go auth.reloadLoop(reloadInterval)
+	}
+
+	if nextAuth := values.Get("else"); nextAuth != "" {
+		nap, err := NewAuth(nextAuth, logger)
+		if err != nil {
+			return nil, fmt.Errorf("chained auth provider construction failed: %w", err)
+		}
+		auth.next = nap
 	}
 
 	return auth, nil
@@ -117,32 +126,28 @@ func (auth *BasicAuth) reloadLoop(interval time.Duration) {
 
 func (auth *BasicAuth) Valid(user, password, userAddr string) bool {
 	pwFile := auth.pw.Load().file
-	return pwFile.Match(user, password)
+	return pwFile.Match(user, password) || tryValid(auth.next, auth.logger, user, password, userAddr)
 }
 
-func (auth *BasicAuth) Validate(_ context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *BasicAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 	hdr_parts := strings.SplitN(hdr, " ", 2)
 	if len(hdr_parts) != 2 || strings.ToLower(hdr_parts[0]) != "basic" {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	token := hdr_parts[1]
 	data, err := base64.StdEncoding.DecodeString(token)
 	if err != nil {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	pair := strings.SplitN(string(data), ":", 2)
 	if len(pair) != 2 {
-		requireBasicAuth(wr, req, auth.hiddenDomain)
-		return "", false
+		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
 	login := pair[0]
@@ -165,12 +170,14 @@ func (auth *BasicAuth) Validate(_ context.Context, wr http.ResponseWriter, req *
 			return login, true
 		}
 	}
-	requireBasicAuth(wr, req, auth.hiddenDomain)
-	return "", false
+	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
 func (auth *BasicAuth) Stop() {
 	auth.stopOnce.Do(func() {
+		if auth.next != nil {
+			auth.next.Stop()
+		}
 		close(auth.stopChan)
 	})
 }
