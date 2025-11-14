@@ -38,6 +38,8 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 		return NoAuth{}, nil
 	case "reject-http", "reject-https":
 		return NewRejectHTTPAuth(url, logger)
+	case "reject-static":
+		return NewStaticRejectAuth(url, logger)
 	default:
 		return nil, errors.New("Unknown auth scheme")
 	}
