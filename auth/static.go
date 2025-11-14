@@ -47,5 +47,12 @@ func NewStaticAuth(param_url *url.URL, logger *clog.CondLogger) (*BasicAuth, err
 		stopChan:     make(chan struct{}),
 	}
 	ba.pw.Store(&pwFile{file: f})
+	if nextAuth := values.Get("else"); nextAuth != "" {
+		nap, err := NewAuth(nextAuth, logger)
+		if err != nil {
+			return nil, fmt.Errorf("chained auth provider construction failed: %w", err)
+		}
+		ba.next = nap
+	}
 	return ba, nil
 }

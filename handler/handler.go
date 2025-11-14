@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/SenseUnit/dumbproxy/auth"
@@ -209,19 +208,18 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	method := strings.ToUpper(req.Method)
-	if (req.URL.Host == "" || req.URL.Scheme == "" && method != "CONNECT") && req.ProtoMajor < 2 ||
-		req.Host == "" && req.ProtoMajor == 2 {
-		http.Error(wr, auth.BAD_REQ_MSG, http.StatusBadRequest)
-		return
-	}
-
 	ctx := req.Context()
 	username, ok := s.auth.Validate(ctx, wr, req)
 	localAddr := getLocalAddr(req.Context())
 	s.logger.Info("Request: %v => %v %q %v %v %v", req.RemoteAddr, localAddr, username, req.Proto, req.Method, req.URL)
 
 	if !ok {
+		return
+	}
+
+	if (req.URL.Host == "" || req.URL.Scheme == "" && req.Method != "CONNECT") && req.ProtoMajor < 2 ||
+		req.Host == "" && req.ProtoMajor == 2 {
+		http.Error(wr, auth.BAD_REQ_MSG, http.StatusBadRequest)
 		return
 	}
 
@@ -237,7 +235,7 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	ctx = ddto.FilterParamsToContext(ctx, req, username)
 	req = req.WithContext(ctx)
 	delHopHeaders(req.Header)
-	switch method {
+	switch req.Method {
 	case "CONNECT":
 		s.HandleTunnel(wr, req, username)
 	case "GETRANDOM":

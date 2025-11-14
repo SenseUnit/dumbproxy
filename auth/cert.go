@@ -96,6 +96,9 @@ func (auth *CertAuth) Validate(ctx context.Context, wr http.ResponseWriter, req 
 
 func (auth *CertAuth) Stop() {
 	auth.stopOnce.Do(func() {
+		if auth.next != nil {
+			auth.next.Stop()
+		}
 		close(auth.stopChan)
 	})
 }
