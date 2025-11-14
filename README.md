@@ -284,6 +284,10 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `method` - override HTTP request method.
   * `qs` - provide query string to the URL in request.
   * `x-forwarded` - boolean parameter specifying if X-Forwarded headers should be populated.
+* `reject-static` - auth provider which rejects auth and returns pre-defined response. Useful as a last auth chain element with other providers in order to customize rejection response. Example: `-auth reject-static://?code=403&body=denied.html&headers=denied.hdr`. Parameters:
+  * `code` - optional parameter specifying HTTP response code. Default is 403.
+  * `body` - optional parameter specifying file with response body.
+  * `headers` - optional parameter specifying file with response headers. It uses format identical to request header file format used by `curl` program.
 
 ## Scripting
 
