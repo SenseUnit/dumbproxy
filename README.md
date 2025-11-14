@@ -280,6 +280,10 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `key_prefix` - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
   * `hidden_domain` - same as in `static` provider.
   * `else` - optional URL specifying the next auth provider to chain to, if authentication failed.
+* `reject-http`, `reject-https` - auth provider which always rejects auth and returns response fetched from specified URL. Useful as a last auth chain element with other providers in order to masquerade proxy endpoint or return custom rejection response from another webserver. Example: `-auth reject-https://www.google.com`. Parameters:
+  * `method` - override HTTP request method.
+  * `qs` - provide query string to the URL in request.
+  * `x-forwarded` - boolean parameter specifying if X-Forwarded headers should be populated.
 
 ## Scripting
 
