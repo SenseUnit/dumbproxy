@@ -431,6 +431,7 @@ Supported proxy schemes are:
 * `force-resolve` - pseudo-proxy forcing domain name resolve before it will be passed to the next proxy in the chain. Must wrap actual proxy dialer in the chain (i.e. be specified in last `-proxy` argument). Example: `force-resolve://`
 * `chain` - pseudo-proxy assembling a chain from other proxy specifications. Query string parameters are:
   * `next` - specification of the next proxy in chain. This query string parameter can be specified more than once. Example: `chain://?next=http%3A%2F%2F127.0.0.1%3A57800&next=force-resolve%3A%2F%2F`.
+* `set-dst` - pseudo-proxy replacing connection destination address with the one specified in hostname part of URI. It is mostly intended for programmatic usage from within routing JS script. Example: `set-dst://localhost:9999`.
 
 ## Configuration files
 
