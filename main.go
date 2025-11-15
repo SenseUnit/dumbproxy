@@ -761,7 +761,6 @@ func run() int {
 				args.autocertLocalCacheTTL,
 				args.autocertLocalCacheTimeout,
 			)
-			lcc.Start()
 			certCache = lcc
 		}
 		if cacheCloser, ok := certCache.(io.Closer); ok {

@@ -17,10 +17,9 @@ type certCacheValue struct {
 }
 
 type LocalCertCache struct {
-	cache     *ttlcache.Cache[certCacheKey, certCacheValue]
-	next      autocert.Cache
-	startOnce sync.Once
-	stopOnce  sync.Once
+	cache    *ttlcache.Cache[certCacheKey, certCacheValue]
+	next     autocert.Cache
+	stopOnce sync.Once
 }
 
 func NewLocalCertCache(next autocert.Cache, ttl, timeout time.Duration) *LocalCertCache {
@@ -42,6 +41,7 @@ func NewLocalCertCache(next autocert.Cache, ttl, timeout time.Duration) *LocalCe
 				nil),
 		),
 	)
+	go cache.Start()
 	return &LocalCertCache{
 		cache: cache,
 		next:  next,
@@ -61,12 +61,6 @@ func (cc *LocalCertCache) Put(ctx context.Context, key string, data []byte) erro
 func (cc *LocalCertCache) Delete(ctx context.Context, key string) error {
 	cc.cache.Delete(key)
 	return cc.next.Delete(ctx, key)
-}
-
-func (cc *LocalCertCache) Start() {
-	cc.startOnce.Do(func() {
-		go cc.cache.Start()
-	})
 }
 
 func (cc *LocalCertCache) Close() error {
