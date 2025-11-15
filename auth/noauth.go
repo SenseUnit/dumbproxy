@@ -11,4 +11,6 @@ func (_ NoAuth) Validate(_ context.Context, _ http.ResponseWriter, _ *http.Reque
 	return "", true
 }
 
-func (_ NoAuth) Stop() {}
+func (_ NoAuth) Close() error {
+	return nil
+}

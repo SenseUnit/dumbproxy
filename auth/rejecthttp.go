@@ -56,4 +56,6 @@ func (_ *RejectHTTPAuth) Valid(_, _, _ string) bool {
 	return false
 }
 
-func (_ *RejectHTTPAuth) Stop() {}
+func (_ *RejectHTTPAuth) Close() error {
+	return nil
+}

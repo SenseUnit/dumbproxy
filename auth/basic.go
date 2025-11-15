@@ -173,11 +173,13 @@ func (auth *BasicAuth) Validate(ctx context.Context, wr http.ResponseWriter, req
 	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
-func (auth *BasicAuth) Stop() {
+func (auth *BasicAuth) Close() error {
+	var err error
 	auth.stopOnce.Do(func() {
 		if auth.next != nil {
-			auth.next.Stop()
+			err = auth.next.Close()
 		}
 		close(auth.stopChan)
 	})
+	return err
 }

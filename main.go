@@ -561,7 +561,7 @@ func run() int {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
-	defer authProvider.Stop()
+	defer authProvider.Close()
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
