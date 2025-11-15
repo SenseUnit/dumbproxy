@@ -2,6 +2,7 @@ package certcache
 
 import (
 	"context"
+	"io"
 	"sync"
 	"time"
 
@@ -68,8 +69,15 @@ func (cc *LocalCertCache) Start() {
 	})
 }
 
-func (cc *LocalCertCache) Stop() {
-	cc.stopOnce.Do(cc.cache.Stop)
+func (cc *LocalCertCache) Close() error {
+	var err error
+	cc.stopOnce.Do(func() {
+		cc.cache.Stop()
+		if cacheCloser, ok := cc.next.(io.Closer); ok {
+			err = cacheCloser.Close()
+		}
+	})
+	return err
 }
 
 var _ autocert.Cache = new(LocalCertCache)

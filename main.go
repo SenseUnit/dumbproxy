@@ -759,8 +759,10 @@ func run() int {
 				args.autocertLocalCacheTimeout,
 			)
 			lcc.Start()
-			defer lcc.Stop()
 			certCache = lcc
+		}
+		if cacheCloser, ok := certCache.(io.Closer); ok {
+			defer cacheCloser.Close()
 		}
 
 		m := &autocert.Manager{
