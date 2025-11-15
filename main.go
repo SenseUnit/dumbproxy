@@ -744,6 +744,9 @@ func run() int {
 				mainLogger.Critical("redis cluster cache construction failed: %v", err)
 				return 3
 			}
+		default:
+			mainLogger.Critical("unknown cert cache type %#v", args.autocertCache.kind)
+			return 3
 		}
 		if len(args.autocertCacheEncKey.Value()) > 0 {
 			certCache, err = certcache.NewEncryptedCache(args.autocertCacheEncKey.Value(), certCache)
