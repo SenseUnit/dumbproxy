@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,7 +13,7 @@ import (
 
 type Auth interface {
 	Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool)
-	Stop()
+	io.Closer
 }
 
 func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {

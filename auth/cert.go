@@ -16,6 +16,7 @@ import (
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
+	"github.com/hashicorp/go-multierror"
 
 	us "github.com/Snawoot/uniqueslice"
 )
@@ -108,16 +109,22 @@ func (auth *CertAuth) Validate(ctx context.Context, wr http.ResponseWriter, req 
 	), true
 }
 
-func (auth *CertAuth) Stop() {
+func (auth *CertAuth) Close() error {
+	var err error
 	auth.stopOnce.Do(func() {
 		if auth.next != nil {
-			auth.next.Stop()
+			if closeErr := auth.next.Close(); closeErr != nil {
+				err = multierror.Append(err, closeErr)
+			}
 		}
 		if auth.reject != nil {
-			auth.reject.Stop()
+			if closeErr := auth.reject.Close(); closeErr != nil {
+				err = multierror.Append(err, closeErr)
+			}
 		}
 		close(auth.stopChan)
 	})
+	return err
 }
 
 func (auth *CertAuth) reload() error {

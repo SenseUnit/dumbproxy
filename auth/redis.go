@@ -13,6 +13,7 @@ import (
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -134,11 +135,17 @@ func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req
 	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
-func (auth *RedisAuth) Stop() {
+func (auth *RedisAuth) Close() error {
+	var err error
 	auth.stopOnce.Do(func() {
 		if auth.next != nil {
-			auth.next.Stop()
+			if closeErr := auth.next.Close(); closeErr != nil {
+				err = multierror.Append(err, closeErr)
+			}
 		}
-		auth.r.Close()
+		if closeErr := auth.r.Close(); closeErr != nil {
+			err = multierror.Append(err, closeErr)
+		}
 	})
+	return err
 }

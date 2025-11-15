@@ -561,7 +561,7 @@ func run() int {
 		mainLogger.Critical("Failed to instantiate auth provider: %v", err)
 		return 3
 	}
-	defer authProvider.Stop()
+	defer authProvider.Close()
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
@@ -744,6 +744,9 @@ func run() int {
 				mainLogger.Critical("redis cluster cache construction failed: %v", err)
 				return 3
 			}
+		default:
+			mainLogger.Critical("unknown cert cache type %#v", args.autocertCache.kind)
+			return 3
 		}
 		if len(args.autocertCacheEncKey.Value()) > 0 {
 			certCache, err = certcache.NewEncryptedCache(args.autocertCacheEncKey.Value(), certCache)
@@ -758,9 +761,10 @@ func run() int {
 				args.autocertLocalCacheTTL,
 				args.autocertLocalCacheTimeout,
 			)
-			lcc.Start()
-			defer lcc.Stop()
 			certCache = lcc
+		}
+		if cacheCloser, ok := certCache.(io.Closer); ok {
+			defer cacheCloser.Close()
 		}
 
 		m := &autocert.Manager{

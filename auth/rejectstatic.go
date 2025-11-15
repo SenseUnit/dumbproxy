@@ -105,4 +105,6 @@ func (_ *StaticRejectAuth) Valid(_, _, _ string) bool {
 	return false
 }
 
-func (_ *StaticRejectAuth) Stop() {}
+func (_ *StaticRejectAuth) Close() error {
+	return nil
+}

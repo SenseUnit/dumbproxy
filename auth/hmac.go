@@ -143,12 +143,14 @@ func (auth *HMACAuth) Validate(ctx context.Context, wr http.ResponseWriter, req 
 	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
-func (auth *HMACAuth) Stop() {
+func (auth *HMACAuth) Close() error {
+	var err error
 	auth.stopOnce.Do(func() {
 		if auth.next != nil {
-			auth.next.Stop()
+			err = auth.next.Close()
 		}
 	})
+	return err
 }
 
 func CalculateHMACSignature(secret []byte, username string, expire int64) []byte {

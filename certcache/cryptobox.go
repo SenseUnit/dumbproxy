@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	cryptorand "crypto/rand"
 	"errors"
+	"io"
 
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/chacha20poly1305"
@@ -63,4 +64,11 @@ func (c *EncryptedCache) Put(ctx context.Context, key string, data []byte) error
 
 func (c *EncryptedCache) Delete(ctx context.Context, key string) error {
 	return c.next.Delete(ctx, key)
+}
+
+func (c *EncryptedCache) Close() error {
+	if cacheCloser, ok := c.next.(io.Closer); ok {
+		return cacheCloser.Close()
+	}
+	return nil
 }

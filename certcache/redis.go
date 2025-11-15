@@ -2,17 +2,25 @@ package certcache
 
 import (
 	"context"
+	"io"
+	"sync"
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-type RedisCache struct {
-	r   redis.Cmdable
-	pfx string
+type CmdableCloser interface {
+	redis.Cmdable
+	io.Closer
 }
 
-func NewRedisCache(r redis.Cmdable, prefix string) *RedisCache {
+type RedisCache struct {
+	r        CmdableCloser
+	pfx      string
+	stopOnce sync.Once
+}
+
+func NewRedisCache(r CmdableCloser, prefix string) *RedisCache {
 	return &RedisCache{
 		r:   r,
 		pfx: prefix,
@@ -36,6 +44,14 @@ func (r *RedisCache) Put(ctx context.Context, key string, data []byte) error {
 
 func (r *RedisCache) Delete(ctx context.Context, key string) error {
 	return r.r.Del(ctx, r.pfx+key).Err()
+}
+
+func (r *RedisCache) Close() error {
+	var err error
+	r.stopOnce.Do(func() {
+		err = r.r.Close()
+	})
+	return err
 }
 
 func RedisCacheFromURL(url string, prefix string) (*RedisCache, error) {

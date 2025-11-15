@@ -2,6 +2,7 @@ package certcache
 
 import (
 	"context"
+	"io"
 	"sync"
 	"time"
 
@@ -16,10 +17,9 @@ type certCacheValue struct {
 }
 
 type LocalCertCache struct {
-	cache     *ttlcache.Cache[certCacheKey, certCacheValue]
-	next      autocert.Cache
-	startOnce sync.Once
-	stopOnce  sync.Once
+	cache    *ttlcache.Cache[certCacheKey, certCacheValue]
+	next     autocert.Cache
+	stopOnce sync.Once
 }
 
 func NewLocalCertCache(next autocert.Cache, ttl, timeout time.Duration) *LocalCertCache {
@@ -41,6 +41,7 @@ func NewLocalCertCache(next autocert.Cache, ttl, timeout time.Duration) *LocalCe
 				nil),
 		),
 	)
+	go cache.Start()
 	return &LocalCertCache{
 		cache: cache,
 		next:  next,
@@ -62,14 +63,15 @@ func (cc *LocalCertCache) Delete(ctx context.Context, key string) error {
 	return cc.next.Delete(ctx, key)
 }
 
-func (cc *LocalCertCache) Start() {
-	cc.startOnce.Do(func() {
-		go cc.cache.Start()
+func (cc *LocalCertCache) Close() error {
+	var err error
+	cc.stopOnce.Do(func() {
+		cc.cache.Stop()
+		if cacheCloser, ok := cc.next.(io.Closer); ok {
+			err = cacheCloser.Close()
+		}
 	})
-}
-
-func (cc *LocalCertCache) Stop() {
-	cc.stopOnce.Do(cc.cache.Stop)
+	return err
 }
 
 var _ autocert.Cache = new(LocalCertCache)
