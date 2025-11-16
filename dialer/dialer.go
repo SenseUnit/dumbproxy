@@ -29,6 +29,7 @@ func init() {
 		return NeverRequireHostname(MaybeWrapWithContextDialer(d)), nil
 	})
 	xproxy.RegisterDialerType("chain", ChainFromURL)
+	xproxy.RegisterDialerType("cmd", CommandDialerFromURL)
 }
 
 type LegacyDialer interface {
