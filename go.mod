@@ -12,6 +12,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/ncruces/go-dns v1.2.7
+	github.com/pires/go-proxyproto v0.8.1
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/refraction-networking/utls v1.8.1
 	github.com/tg123/go-htpasswd v1.2.4
@@ -34,7 +35,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/pires/go-proxyproto v0.8.1
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.36.0 // indirect
 	golang.org/x/text v0.30.0 // indirect
