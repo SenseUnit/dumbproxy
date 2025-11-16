@@ -118,4 +118,14 @@ func (c *PipeConn) SetDeadline(t time.Time) error {
 	return err
 }
 
+func (c *PipeConn) ReadFrom(r io.Reader) (n int64, err error) {
+	return c.w.ReadFrom(r)
+}
+
+func (c *PipeConn) WriteTo(w io.Writer) (n int64, err error) {
+	return c.r.WriteTo(w)
+}
+
 var _ net.Conn = new(PipeConn)
+var _ io.ReaderFrom = new(PipeConn)
+var _ io.WriterTo = new(PipeConn)
