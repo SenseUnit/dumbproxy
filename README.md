@@ -432,6 +432,9 @@ Supported proxy schemes are:
 * `chain` - pseudo-proxy assembling a chain from other proxy specifications. Query string parameters are:
   * `next` - specification of the next proxy in chain. This query string parameter can be specified more than once. Example: `chain://?next=http%3A%2F%2F127.0.0.1%3A57800&next=force-resolve%3A%2F%2F`.
 * `set-dst` - pseudo-proxy replacing connection destination address with the one specified in hostname part of URI. It is mostly intended for programmatic usage from within routing JS script. Example: `set-dst://localhost:9999`.
+* `cmd` - wrapper which redirects connection into stdin/stdout of external program. Destination address and network are passed to subprocess via `DUMBPROXY_DST_ADDR` and `DUMBPROXY_DST_NET` environment variables. Example: `cmd://?cmd=openssl&arg=s_client&arg=-connect&arg=google.com%3A443`. Parameters:
+  * `cmd` - program to execute.
+  * `arg` - optional command line argument passed to a program. This parameter may be repeated more than once.
 
 ## Configuration files
 
