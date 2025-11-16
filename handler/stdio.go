@@ -3,23 +3,24 @@ package handler
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
+
+	"github.com/SenseUnit/dumbproxy/dialer"
 )
 
-func StdIOHandler(dialer HandlerDialer, logger *clog.CondLogger, forward ForwardFunc) func(ctx context.Context, reader io.Reader, writer io.Writer, dstAddress string) error {
-	return func(ctx context.Context, reader io.Reader, writer io.Writer, dstAddress string) error {
+func StdIOHandler(d HandlerDialer, logger *clog.CondLogger, forward ForwardFunc) func(context.Context, dialer.ReadPipe, dialer.WritePipe, string) error {
+	return func(ctx context.Context, reader dialer.ReadPipe, writer dialer.WritePipe, dstAddress string) error {
 		logger.Debug("Request: %v => %v %q %v %v %v", "<stdio>", "<stdio>", "", "STDIO", "CONNECT", dstAddress)
-		target, err := dialer.DialContext(ctx, "tcp", dstAddress)
+		target, err := d.DialContext(ctx, "tcp", dstAddress)
 		if err != nil {
 			return fmt.Errorf("connect to %q failed: %w", dstAddress, err)
 		}
 		defer target.Close()
 
-		return forward(ctx, "", wrapSOCKS(reader, writer), target)
+		return forward(ctx, "", dialer.NewPipeConn(reader, writer), target)
 	}
 }
 
