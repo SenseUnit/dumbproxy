@@ -18,7 +18,7 @@ require (
 	github.com/tg123/go-htpasswd v1.2.4
 	github.com/things-go/go-socks5 v0.1.0
 	github.com/zeebo/xxh3 v1.0.2
-	golang.org/x/crypto v0.44.0
+	golang.org/x/crypto v0.45.0
 	golang.org/x/crypto/x509roots/fallback v0.0.0-20251112184832-bcf6a849efcf
 	golang.org/x/net v0.47.0
 	golang.org/x/sync v0.18.0
