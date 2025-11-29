@@ -4,39 +4,54 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand/v2"
+	"sync"
 	"time"
 
-	"github.com/zeebo/xxh3"
+	"github.com/ajwerner/orderstat"
 
 	"github.com/SenseUnit/dumbproxy/rate"
 )
 
 const copyChunkSize = 128 * 1024
 
-type BWLimit struct {
-	d []rate.Limiter
-	u []rate.Limiter
+type treeItem struct {
+	key string
+	mux sync.RWMutex
+	ul  *rate.Limiter
+	dl  *rate.Limiter
 }
 
-func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool) *BWLimit {
-	if buckets == 0 {
-		buckets = 1
-	}
-	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), max(copyChunkSize, burst)))
-	d := make([]rate.Limiter, buckets)
-	for i := range d {
-		d[i] = lim
-	}
-	u := d
-	if separate {
-		u = make([]rate.Limiter, buckets)
-		for i := range u {
-			u[i] = lim
-		}
-	}
+func (i *treeItem) Less(other orderstat.Item) bool {
+	return other.(*treeItem).key > i.key
+}
+
+func (i *treeItem) rLock() {
+	i.mux.RLock()
+}
+
+func (i *treeItem) rUnlock() {
+	i.mux.RUnlock()
+}
+
+func (i *treeItem) tryLock() bool {
+	return i.mux.TryLock()
+}
+
+type BWLimit struct {
+	mux      sync.Mutex
+	m        *orderstat.Tree
+	bps      float64
+	burst    int64
+	separate bool
+}
+
+func NewBWLimit(bytesPerSecond float64, burst int64, separate bool) *BWLimit {
 	return &BWLimit{
-		d: d,
-		u: u,
+		m:        orderstat.NewTree(),
+		bps:      bytesPerSecond,
+		burst:    burst,
+		separate: separate,
 	}
 }
 
@@ -99,21 +114,70 @@ func (l *BWLimit) futureCopyAndCloseWrite(ctx context.Context, c chan<- error, r
 	close(c)
 }
 
-func (l *BWLimit) getRatelimiters(username string) (*rate.Limiter, *rate.Limiter) {
-	idx := int(hashUsername(username, uint64(len(l.d))))
-	return &(l.d[idx]), &(l.u[idx])
+func (l *BWLimit) newTreeItem(username string) *treeItem {
+	ul := rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
+	dl := ul
+	if l.separate {
+		dl = rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
+	}
+	return &treeItem{
+		key: username,
+		ul:  ul,
+		dl:  dl,
+	}
+}
+
+const randomEvictions = 2
+
+func (l *BWLimit) evictRandom() {
+	for _ = range randomEvictions {
+		n := l.m.Len()
+		if n == 0 {
+			return
+		}
+		item := l.m.Select(rand.IntN(n))
+		if item == nil {
+			panic("random tree sampling failed")
+		}
+		ti := item.(*treeItem)
+		if ti.tryLock() {
+			if ti.ul.Tokens() >= float64(ti.ul.Burst()) && ti.dl.Tokens() >= float64(ti.dl.Burst()) {
+				// RL is full and nobody touches it. Removing...
+				l.m.Delete(item)
+			}
+		}
+	}
+}
+
+func (l *BWLimit) getRatelimiters(username string) *treeItem {
+	l.mux.Lock()
+	defer l.mux.Unlock()
+	item := l.m.Get(&treeItem{
+		key: username,
+	})
+	if item == nil {
+		ti := l.newTreeItem(username)
+		ti.rLock()
+		l.m.ReplaceOrInsert(ti)
+		l.evictRandom()
+		return ti
+	}
+	ti := item.(*treeItem)
+	ti.rLock()
+	return ti
 }
 
 func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error {
-	dl, ul := l.getRatelimiters(username)
+	ti := l.getRatelimiters(username)
+	defer ti.rUnlock()
 
 	var err error
 	i2oErr := make(chan error, 1)
 	o2iErr := make(chan error, 1)
 	ctxErr := ctx.Done()
 
-	go l.futureCopyAndCloseWrite(ctx, i2oErr, ul, outgoing, incoming)
-	go l.futureCopyAndCloseWrite(ctx, o2iErr, dl, incoming, outgoing)
+	go l.futureCopyAndCloseWrite(ctx, i2oErr, ti.ul, outgoing, incoming)
+	go l.futureCopyAndCloseWrite(ctx, o2iErr, ti.dl, incoming, outgoing)
 
 	// do while we're listening to children channels
 	for i2oErr != nil || o2iErr != nil {
@@ -139,34 +203,4 @@ func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming
 	}
 
 	return err
-}
-
-func hashUsername(s string, nslots uint64) uint64 {
-	if nslots == 0 {
-		panic("number of slots can't be zero")
-	}
-
-	hash := xxh3.New()
-	iv := []byte{0}
-
-	if nslots&(nslots-1) == 0 {
-		hash.Write(iv)
-		hash.Write([]byte(s))
-		return hash.Sum64() & (nslots - 1)
-	}
-
-	minBiased := -((-nslots) % nslots) // == 2**64 - (2**64%nslots)
-
-	var hv uint64
-	for {
-		hash.Write(iv)
-		hash.Write([]byte(s))
-		hv = hash.Sum64()
-		if hv < minBiased {
-			break
-		}
-		iv[0]++
-		hash.Reset()
-	}
-	return hv % nslots
 }

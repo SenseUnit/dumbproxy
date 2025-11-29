@@ -181,7 +181,7 @@ func (r *Reservation) CancelAt(t time.Time) {
 	// calculate tokens to restore
 	// The duration between lim.lastEvent and r.timeToAct tells us how many tokens were reserved
 	// after r was obtained. These tokens should not be restored.
-	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(time.Duration(r.lim.lastEvent - r.timeToAct))
+	restoreTokens := float64(r.tokens) - r.limit.tokensFromDuration(time.Duration(r.lim.lastEvent-r.timeToAct))
 	if restoreTokens <= 0 {
 		return
 	}

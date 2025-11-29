@@ -321,7 +321,6 @@ type CLIArgs struct {
 	tlsALPNEnabled            bool
 	bwLimit                   uint64
 	bwBurst                   int64
-	bwBuckets                 uint
 	bwSeparate                bool
 	dnsServers                []string
 	dnsPreferAddress          dnsPreferenceArg
@@ -447,7 +446,6 @@ func parse_args() *CLIArgs {
 	flag.BoolVar(&args.tlsALPNEnabled, "tls-alpn-enabled", true, "enable application protocol negotiation with TLS ALPN extension")
 	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
-	flag.UintVar(&args.bwBuckets, "bw-limit-buckets", 1024*1024, "number of buckets of bandwidth limit")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
 	flag.Func("dns-server", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://..., default://). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets the list", func(p string) error {
 		if p == "" {
@@ -646,7 +644,6 @@ func run() int {
 		forwarder = forward.NewBWLimit(
 			float64(args.bwLimit),
 			args.bwBurst,
-			args.bwBuckets,
 			args.bwSeparate,
 		).PairConnections
 	}
