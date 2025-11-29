@@ -510,8 +510,6 @@ Usage of /home/user/go/bin/dumbproxy:
     	Unix domain socket to listen to, overrides bind-address if set.
   -bw-limit uint
     	per-user bandwidth limit in bytes per second
-  -bw-limit-buckets uint
-    	number of buckets of bandwidth limit (default 1048576)
   -bw-limit-burst int
     	allowed burst size for bandwidth limit, how many "tokens" can fit into leaky bucket
   -bw-limit-separate
