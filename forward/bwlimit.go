@@ -14,18 +14,15 @@ import (
 const copyChunkSize = 128 * 1024
 
 type BWLimit struct {
-	limit rate.Limit
-	burst int64
-	d     []rate.Limiter
-	u     []rate.Limiter
+	d []rate.Limiter
+	u []rate.Limiter
 }
 
 func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool) *BWLimit {
 	if buckets == 0 {
 		buckets = 1
 	}
-	burst = max(copyChunkSize, burst)
-	lim := *(rate.NewLimiter(burst))
+	lim := *(rate.NewLimiter(rate.Limit(bytesPerSecond), max(copyChunkSize, burst)))
 	d := make([]rate.Limiter, buckets)
 	for i := range d {
 		d[i] = lim
@@ -38,10 +35,8 @@ func NewBWLimit(bytesPerSecond float64, burst int64, buckets uint, separate bool
 		}
 	}
 	return &BWLimit{
-		limit: rate.Limit(bytesPerSecond),
-		burst: burst,
-		d:     d,
-		u:     u,
+		d: d,
+		u: u,
 	}
 }
 
@@ -53,7 +48,7 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 	var n int64
 	for {
 		t := time.Now()
-		r := rl.ReserveN(l.limit, l.burst, t, copyChunkSize)
+		r := rl.ReserveN(t, copyChunkSize)
 		if !r.OK() {
 			err = errors.New("can't get rate limit reservation")
 			return
@@ -70,9 +65,9 @@ func (l *BWLimit) copy(ctx context.Context, rl *rate.Limiter, dst io.Writer, src
 		n, err = io.Copy(dst, lim)
 		written += n
 		if n < copyChunkSize {
-			r.CancelAt(l.limit, l.burst, t)
+			r.CancelAt(t)
 			if n > 0 {
-				rl.ReserveN(l.limit, l.burst, t, n)
+				rl.ReserveN(t, n)
 			}
 		}
 		if err != nil {
