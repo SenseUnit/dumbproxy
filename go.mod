@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.6
 
 require (
-	github.com/Snawoot/secache v0.1.2
+	github.com/Snawoot/secache v0.2.0
 	github.com/Snawoot/uniqueslice v0.1.1
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7

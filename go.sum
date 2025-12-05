@@ -4,6 +4,8 @@ github.com/Masterminds/semver/v3 v3.2.1 h1:RN9w6+7QoMeJVGyfmbcgs28Br8cvmnucEXnY0
 github.com/Masterminds/semver/v3 v3.2.1/go.mod h1:qvl/7zhW3nngYb5+80sSMF+FG2BjYrf8m9wsX0PNOMQ=
 github.com/Snawoot/secache v0.1.2 h1:4hV67tww6LQWFMlJ4p3V+s/VdHK0JeQosmKjT6j+FUg=
 github.com/Snawoot/secache v0.1.2/go.mod h1:flP8z/QMYTLjP2UhrMjwYjgpPAWmK0f3vYmdTzQBAR4=
+github.com/Snawoot/secache v0.2.0 h1:c+7V1AxLPsIVIfE7OiSDMnkMNM5Pv+4jOlWWIoBniKg=
+github.com/Snawoot/secache v0.2.0/go.mod h1:flP8z/QMYTLjP2UhrMjwYjgpPAWmK0f3vYmdTzQBAR4=
 github.com/Snawoot/uniqueslice v0.1.1 h1:KEfv3FtAXiNEoxvcc79pFQDhnqwYXQyZIkxOM4e/qpw=
 github.com/Snawoot/uniqueslice v0.1.1/go.mod h1:K9zIaHO43FGLHbqm6WCDFeY6+CN/du5eiio/vxvDVC8=
 github.com/andybalholm/brotli v1.2.0 h1:ukwgCxwYrmACq68yiUqwIWnGY0cTPox/M94sVwToPjQ=
