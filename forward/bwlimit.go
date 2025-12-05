@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Snawoot/secache"
+	"github.com/Snawoot/secache/randmap"
 
 	"github.com/SenseUnit/dumbproxy/rate"
 )
@@ -18,10 +19,6 @@ type cacheItem struct {
 	mux sync.RWMutex
 	ul  rate.Limiter
 	dl  rate.Limiter
-}
-
-func (i *cacheItem) tryRLock() bool {
-	return i.mux.TryRLock()
 }
 
 func (i *cacheItem) rLock() {
@@ -123,30 +120,28 @@ func (l *BWLimit) futureCopyAndCloseWrite(ctx context.Context, c chan<- error, r
 	close(c)
 }
 
-func (l *BWLimit) getRatelimiters(username string) *cacheItem {
-	for {
-		created := false
-		item := l.cache.GetOrCreate(username, func() *cacheItem {
-			created = true
+func (l *BWLimit) getRatelimiters(username string) (res *cacheItem) {
+	l.cache.Do(func(m *randmap.RandMap[string, *cacheItem]) {
+		var ok bool
+		res, ok = m.Get(username)
+		if ok {
+			res.rLock()
+		} else {
 			ul := rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
 			dl := ul
 			if l.separate {
 				dl = rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
 			}
-			ci := &cacheItem{
+			res = &cacheItem{
 				ul: *ul,
 				dl: *dl,
 			}
-			ci.rLock()
-			return ci
-		})
-		if created {
-			return item
+			res.rLock()
+			l.cache.SetLocked(m, username, res)
 		}
-		if item.tryRLock() {
-			return item
-		}
-	}
+		return
+	})
+	return
 }
 
 func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error {
