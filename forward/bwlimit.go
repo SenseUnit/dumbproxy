@@ -17,8 +17,8 @@ const copyChunkSize = 128 * 1024
 
 type cacheItem struct {
 	mux sync.RWMutex
-	ul  rate.Limiter
-	dl  rate.Limiter
+	ul  *rate.Limiter
+	dl  *rate.Limiter
 }
 
 func (i *cacheItem) rLock() {
@@ -133,8 +133,8 @@ func (l *BWLimit) getRatelimiters(username string) (res *cacheItem) {
 				dl = rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
 			}
 			res = &cacheItem{
-				ul: *ul,
-				dl: *dl,
+				ul: ul,
+				dl: dl,
 			}
 			res.rLock()
 			l.cache.SetLocked(m, username, res)
@@ -153,8 +153,8 @@ func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming
 	o2iErr := make(chan error, 1)
 	ctxErr := ctx.Done()
 
-	go l.futureCopyAndCloseWrite(ctx, i2oErr, &ci.ul, outgoing, incoming)
-	go l.futureCopyAndCloseWrite(ctx, o2iErr, &ci.dl, incoming, outgoing)
+	go l.futureCopyAndCloseWrite(ctx, i2oErr, ci.ul, outgoing, incoming)
+	go l.futureCopyAndCloseWrite(ctx, o2iErr, ci.dl, incoming, outgoing)
 
 	// do while we're listening to children channels
 	for i2oErr != nil || o2iErr != nil {
