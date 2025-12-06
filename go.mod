@@ -5,12 +5,11 @@ go 1.24.0
 toolchain go1.24.6
 
 require (
+	github.com/Snawoot/secache v0.2.0
 	github.com/Snawoot/uniqueslice v0.1.1
-	github.com/ajwerner/orderstat v0.0.0-20200914031159-0ebfd67afbea
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/dop251/goja v0.0.0-20251103141225-af2ceb9156d7
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/ncruces/go-dns v1.2.7
 	github.com/pires/go-proxyproto v0.8.1

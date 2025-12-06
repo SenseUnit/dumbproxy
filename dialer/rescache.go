@@ -6,12 +6,13 @@ import (
 	"net"
 	"net/netip"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/SenseUnit/dumbproxy/dialer/dto"
+	"github.com/Snawoot/secache"
 	"github.com/hashicorp/go-multierror"
-	"github.com/jellydator/ttlcache/v3"
+	"golang.org/x/sync/singleflight"
+
+	"github.com/SenseUnit/dumbproxy/dialer/dto"
 )
 
 type resolverCacheKey struct {
@@ -20,46 +21,36 @@ type resolverCacheKey struct {
 }
 
 type resolverCacheValue struct {
-	addrs []netip.Addr
-	err   error
+	expires time.Time
+	addrs   []netip.Addr
+	err     error
 }
 
 type NameResolveCachingDialer struct {
-	cache     *ttlcache.Cache[resolverCacheKey, resolverCacheValue]
-	next      Dialer
-	startOnce sync.Once
-	stopOnce  sync.Once
+	resolver Resolver
+	cache    secache.Cache[resolverCacheKey, *resolverCacheValue]
+	sf       singleflight.Group
+	posTTL   time.Duration
+	negTTL   time.Duration
+	timeout  time.Duration
+	next     Dialer
 }
 
 func NewNameResolveCachingDialer(next Dialer, resolver Resolver, posTTL, negTTL, timeout time.Duration) *NameResolveCachingDialer {
-	cache := ttlcache.New[resolverCacheKey, resolverCacheValue](
-		ttlcache.WithDisableTouchOnHit[resolverCacheKey, resolverCacheValue](),
-		ttlcache.WithLoader(
-			ttlcache.NewSuppressedLoader(
-				ttlcache.LoaderFunc[resolverCacheKey, resolverCacheValue](
-					func(c *ttlcache.Cache[resolverCacheKey, resolverCacheValue], key resolverCacheKey) *ttlcache.Item[resolverCacheKey, resolverCacheValue] {
-						ctx, cl := context.WithTimeout(context.Background(), timeout)
-						defer cl()
-						res, err := resolver.LookupNetIP(ctx, key.network, key.host)
-						for i := range res {
-							res[i] = res[i].Unmap()
-						}
-						setTTL := negTTL
-						if err == nil {
-							setTTL = posTTL
-						}
-						return c.Set(key, resolverCacheValue{
-							addrs: res,
-							err:   err,
-						}, setTTL)
-					},
-				),
-				nil),
-		),
-	)
+	//	func(c *ttlcache.Cache[resolverCacheKey, resolverCacheValue], key resolverCacheKey) *ttlcache.Item[resolverCacheKey, resolverCacheValue] {
+	//	},
 	return &NameResolveCachingDialer{
-		cache: cache,
-		next:  next,
+		resolver: resolver,
+		cache: *(secache.New[resolverCacheKey, *resolverCacheValue](
+			3,
+			func(key resolverCacheKey, item *resolverCacheValue) bool {
+				return time.Now().Before(item.expires)
+			},
+		)),
+		posTTL:  posTTL,
+		negTTL:  negTTL,
+		timeout: timeout,
+		next:    next,
 	}
 }
 
@@ -91,16 +82,35 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 	}
 
 	host = strings.ToLower(host)
-
-	resItem := nrcd.cache.Get(resolverCacheKey{
+	key := resolverCacheKey{
 		network: resolveNetwork,
 		host:    host,
-	})
-	if resItem == nil {
-		return nil, fmt.Errorf("cache lookup failed for pair <%q, %q>", resolveNetwork, host)
 	}
 
-	res := resItem.Value()
+	res, ok := nrcd.cache.GetValidOrDelete(key)
+	if !ok {
+		v, _, _ := nrcd.sf.Do(key.network+":"+key.host, func() (any, error) {
+			ctx, cl := context.WithTimeout(context.Background(), nrcd.timeout)
+			defer cl()
+			res, err := nrcd.resolver.LookupNetIP(ctx, key.network, key.host)
+			for i := range res {
+				res[i] = res[i].Unmap()
+			}
+			setTTL := nrcd.negTTL
+			if err == nil {
+				setTTL = nrcd.posTTL
+			}
+			item := &resolverCacheValue{
+				expires: time.Now().Add(setTTL),
+				addrs:   res,
+				err:     err,
+			}
+			nrcd.cache.Set(key, item)
+			return item, nil
+		})
+		res = v.(*resolverCacheValue)
+	}
+
 	if res.err != nil {
 		return nil, res.err
 	}
@@ -127,16 +137,6 @@ func (nrcd *NameResolveCachingDialer) Dial(network, address string) (net.Conn, e
 
 func (nrcd *NameResolveCachingDialer) WantsHostname(ctx context.Context, net, address string) bool {
 	return WantsHostname(ctx, net, address, nrcd.next)
-}
-
-func (nrcd *NameResolveCachingDialer) Start() {
-	nrcd.startOnce.Do(func() {
-		go nrcd.cache.Start()
-	})
-}
-
-func (nrcd *NameResolveCachingDialer) Stop() {
-	nrcd.stopOnce.Do(nrcd.cache.Stop)
 }
 
 var _ Dialer = new(NameResolveCachingDialer)

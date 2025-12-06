@@ -6,9 +6,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
+	"github.com/Snawoot/secache"
 	xproxy "golang.org/x/net/proxy"
-	"golang.org/x/sync/singleflight"
 )
 
 type dialerCacheKey struct {
@@ -17,20 +16,14 @@ type dialerCacheKey struct {
 }
 
 type dialerCacheValue struct {
-	dialer xproxy.Dialer
-	err    error
+	expires time.Time
+	dialer  xproxy.Dialer
+	err     error
 }
 
-var (
-	dialerCache = ttlcache.New[dialerCacheKey, dialerCacheValue](
-		ttlcache.WithDisableTouchOnHit[dialerCacheKey, dialerCacheValue](),
-	)
-	dialerCacheSingleFlight = new(singleflight.Group)
-)
-
-func init() {
-	go dialerCache.Start()
-}
+var dialerCache = secache.New[dialerCacheKey, *dialerCacheValue](3, func(key dialerCacheKey, val *dialerCacheValue) bool {
+	return time.Now().Before(val.expires)
+})
 
 func GetCachedDialer(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	params, err := url.ParseQuery(u.RawQuery)
@@ -51,29 +44,19 @@ func GetCachedDialer(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cached dialer: unable to parse TTL duration %q: %w", params.Get("ttl"), err)
 	}
-	cacheRes := dialerCache.Get(
+	item := dialerCache.GetOrCreate(
 		dialerCacheKey{
 			url:  params.Get("url"),
 			next: next,
 		},
-		ttlcache.WithLoader[dialerCacheKey, dialerCacheValue](
-			ttlcache.NewSuppressedLoader[dialerCacheKey, dialerCacheValue](
-				ttlcache.LoaderFunc[dialerCacheKey, dialerCacheValue](
-					func(c *ttlcache.Cache[dialerCacheKey, dialerCacheValue], key dialerCacheKey) *ttlcache.Item[dialerCacheKey, dialerCacheValue] {
-						dialer, err := xproxy.FromURL(parsedURL, next)
-						return c.Set(
-							key,
-							dialerCacheValue{
-								dialer: dialer,
-								err:    err,
-							},
-							ttl,
-						)
-					},
-				),
-				dialerCacheSingleFlight,
-			),
-		),
-	).Value()
-	return cacheRes.dialer, cacheRes.err
+		func() *dialerCacheValue {
+			dialer, err := xproxy.FromURL(parsedURL, next)
+			return &dialerCacheValue{
+				expires: time.Now().Add(ttl),
+				dialer:  dialer,
+				err:     err,
+			}
+		},
+	)
+	return item.dialer, item.err
 }

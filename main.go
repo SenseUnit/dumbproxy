@@ -283,57 +283,56 @@ type bindSpec struct {
 }
 
 type CLIArgs struct {
-	bind                      bindSpec
-	bindReusePort             bool
-	bindPprof                 bindSpec
-	unixSockUnlink            bool
-	unixSockMode              modeArg
-	mode                      proxyModeArg
-	auth                      string
-	verbosity                 int
-	cert, key, cafile         string
-	list_ciphers              bool
-	list_curves               bool
-	ciphers                   string
-	curves                    string
-	disableHTTP2              bool
-	showVersion               bool
-	autocert                  bool
-	autocertWhitelist         CSVArg
-	autocertCache             autocertCache
-	autocertCacheRedisPrefix  string
-	autocertACME              string
-	autocertEmail             string
-	autocertHTTP              string
-	autocertLocalCacheTTL     time.Duration
-	autocertLocalCacheTimeout time.Duration
-	autocertCacheEncKey       hexArg
-	passwd                    string
-	passwdCost                int
-	hmacSign                  bool
-	hmacGenKey                bool
-	positionalArgs            []string
-	proxy                     []proxyArg
-	sourceIPHints             string
-	userIPHints               bool
-	minTLSVersion             TLSVersionArg
-	maxTLSVersion             TLSVersionArg
-	tlsALPNEnabled            bool
-	bwLimit                   uint64
-	bwBurst                   int64
-	bwSeparate                bool
-	dnsServers                []string
-	dnsPreferAddress          dnsPreferenceArg
-	dnsCacheTTL               time.Duration
-	dnsCacheNegTTL            time.Duration
-	dnsCacheTimeout           time.Duration
-	reqHeaderTimeout          time.Duration
-	denyDstAddr               PrefixList
-	jsAccessFilter            string
-	jsAccessFilterInstances   int
-	jsProxyRouterInstances    int
-	proxyproto                bool
-	shutdownTimeout           time.Duration
+	bind                     bindSpec
+	bindReusePort            bool
+	bindPprof                bindSpec
+	unixSockUnlink           bool
+	unixSockMode             modeArg
+	mode                     proxyModeArg
+	auth                     string
+	verbosity                int
+	cert, key, cafile        string
+	list_ciphers             bool
+	list_curves              bool
+	ciphers                  string
+	curves                   string
+	disableHTTP2             bool
+	showVersion              bool
+	autocert                 bool
+	autocertWhitelist        CSVArg
+	autocertCache            autocertCache
+	autocertCacheRedisPrefix string
+	autocertACME             string
+	autocertEmail            string
+	autocertHTTP             string
+	autocertLocalCacheTTL    time.Duration
+	autocertCacheEncKey      hexArg
+	passwd                   string
+	passwdCost               int
+	hmacSign                 bool
+	hmacGenKey               bool
+	positionalArgs           []string
+	proxy                    []proxyArg
+	sourceIPHints            string
+	userIPHints              bool
+	minTLSVersion            TLSVersionArg
+	maxTLSVersion            TLSVersionArg
+	tlsALPNEnabled           bool
+	bwLimit                  uint64
+	bwBurst                  int64
+	bwSeparate               bool
+	dnsServers               []string
+	dnsPreferAddress         dnsPreferenceArg
+	dnsCacheTTL              time.Duration
+	dnsCacheNegTTL           time.Duration
+	dnsCacheTimeout          time.Duration
+	reqHeaderTimeout         time.Duration
+	denyDstAddr              PrefixList
+	jsAccessFilter           string
+	jsAccessFilterInstances  int
+	jsProxyRouterInstances   int
+	proxyproto               bool
+	shutdownTimeout          time.Duration
 }
 
 func parse_args() *CLIArgs {
@@ -428,7 +427,6 @@ func parse_args() *CLIArgs {
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
 	flag.StringVar(&args.autocertHTTP, "autocert-http", "", "listen address for HTTP-01 challenges handler of ACME")
 	flag.DurationVar(&args.autocertLocalCacheTTL, "autocert-local-cache-ttl", 0, "enables in-memory cache for certificates")
-	flag.DurationVar(&args.autocertLocalCacheTimeout, "autocert-local-cache-timeout", 10*time.Second, "timeout for cert cache queries")
 	flag.StringVar(&args.passwd, "passwd", "", "update given htpasswd file and add/set password for username. "+
 		"Username and password can be passed as positional arguments or requested interactively")
 	flag.IntVar(&args.passwdCost, "passwd-cost", bcrypt.MinCost, "bcrypt password cost (for -passwd mode)")
@@ -624,16 +622,13 @@ func run() int {
 	}
 	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
 	if args.dnsCacheTTL > 0 {
-		cd := dialer.NewNameResolveCachingDialer(
+		dialerRoot = dialer.NewNameResolveCachingDialer(
 			dialerRoot,
 			nameResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,
 			args.dnsCacheTimeout,
 		)
-		cd.Start()
-		defer cd.Stop()
-		dialerRoot = cd
 	} else {
 		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 	}
@@ -756,7 +751,6 @@ func run() int {
 			lcc := certcache.NewLocalCertCache(
 				certCache,
 				args.autocertLocalCacheTTL,
-				args.autocertLocalCacheTimeout,
 			)
 			certCache = lcc
 		}
