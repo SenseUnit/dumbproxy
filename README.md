@@ -321,8 +321,6 @@ It is possible to filter (allow or deny) requests with simple `access` JS functi
 
 `access` function must return boolean value, `true` allows request and `false` forbids it. Any exception will be reported to log and the corresponding request will be denied.
 
-Also it is possible to use builtin `print` function to print arbitrary values into dumbproxy log for debugging purposes.
-
 Example:
 
 ```js
@@ -360,8 +358,6 @@ dumbproxy can select upstream proxy dynamically invoking `getProxy` JS function 
 
 Note that this option can be repeated multiple times, same as `-proxy` option for chaining of proxies. These two options can be used together and order of chaining will be as they come in command line. For generalization purposes we can say that `-proxy` option is equivalent to `-js-proxy-router` option with script which returns just one static proxy.
 
-`getProxy` scripts can read helper files using the built-in `readFile(path)` function that returns the file contents as a string.
-
 `getProxy` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it is expected to return proxy URL in string format *scheme://[user:password@]host:port* or empty string `""` if no additional upstream proxy needed (i.e. direct connection if there are no other proxy dialers defined in chain). See [supported upstream proxy schemes](#supported-upstream-proxy-schemes) for details.
 
 Example:
@@ -381,6 +377,13 @@ function getProxy(req, dst, username) {
 > `getProxy` can be invoked once or twice per request. If first invocation with `null` resolved host address returns "direct" mode and no other dialer has suppressed name resolving, name resolution will be performed and `getProxy` will be invoked once again with resolved address for the final decision.
 > 
 > This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
+
+### Scripting functions
+
+Following builtin functions are addionally available within JS scripts:
+
+* `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
+* `readFile(path: string): string` - read file from *path* and return its content as a string.
 
 ## Supported upstream proxy schemes
 
