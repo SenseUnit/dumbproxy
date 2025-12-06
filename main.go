@@ -622,16 +622,13 @@ func run() int {
 	}
 	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
 	if args.dnsCacheTTL > 0 {
-		cd := dialer.NewNameResolveCachingDialer(
+		dialerRoot = dialer.NewNameResolveCachingDialer(
 			dialerRoot,
 			nameResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,
 			args.dnsCacheTimeout,
 		)
-		cd.Start()
-		defer cd.Stop()
-		dialerRoot = cd
 	} else {
 		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 	}
