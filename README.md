@@ -360,6 +360,8 @@ dumbproxy can select upstream proxy dynamically invoking `getProxy` JS function 
 
 Note that this option can be repeated multiple times, same as `-proxy` option for chaining of proxies. These two options can be used together and order of chaining will be as they come in command line. For generalization purposes we can say that `-proxy` option is equivalent to `-js-proxy-router` option with script which returns just one static proxy.
 
+`getProxy` scripts can read helper files using the built-in `readFile(path)` function that returns the file contents as a string.
+
 `getProxy` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it is expected to return proxy URL in string format *scheme://[user:password@]host:port* or empty string `""` if no additional upstream proxy needed (i.e. direct connection if there are no other proxy dialers defined in chain). See [supported upstream proxy schemes](#supported-upstream-proxy-schemes) for details.
 
 Example:

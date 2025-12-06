@@ -37,6 +37,10 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 		if err != nil {
 			return nil, errors.New("can't add print function to runtime")
 		}
+		err = jsext.AddFileReader(vm)
+		if err != nil {
+			return nil, errors.New("can't add file reader function to runtime")
+		}
 		vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 		_, err = vm.RunString(string(script))
 		if err != nil {
