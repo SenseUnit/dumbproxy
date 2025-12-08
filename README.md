@@ -385,6 +385,10 @@ Following builtin functions are addionally available within JS scripts:
 * `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
 * `readFile(path: string): string` - read file from *path* and return its content as a string.
 
+Following objects are additionally available in global scope of JS scripts:
+
+* `env` - readonly object containing all environment variables.
+
 ## Supported upstream proxy schemes
 
 Supported proxy schemes are:
