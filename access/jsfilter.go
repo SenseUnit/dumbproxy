@@ -46,7 +46,6 @@ func NewJSFilter(filename string, instances int, logger *clog.CondLogger, next F
 			if err != nil {
 				return fmt.Errorf("can't configure runtime: %w", err)
 			}
-			vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 			_, err = vm.RunString(string(script))
 			if err != nil {
 				return fmt.Errorf("script run failed: %w", err)

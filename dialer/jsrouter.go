@@ -44,7 +44,6 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 			if err != nil {
 				return fmt.Errorf("can't configure runtime runtime: %w", err)
 			}
-			vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
 			_, err = vm.RunString(string(script))
 			if err != nil {
 				return fmt.Errorf("script run failed: %w", err)
