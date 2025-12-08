@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/dop251/goja"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/SenseUnit/dumbproxy/jsext"
 	clog "github.com/SenseUnit/dumbproxy/log"
@@ -32,39 +33,47 @@ func NewJSFilter(filename string, instances int, logger *clog.CondLogger, next F
 
 	instances = max(1, instances)
 	pool := make(chan JSFilterFunc, instances)
+	initGroup, _ := errgroup.WithContext(context.Background())
 
 	for i := 0; i < instances; i++ {
-		vm := goja.New()
-		err = jsext.AddPrinter(vm, logger)
-		if err != nil {
-			return nil, fmt.Errorf("can't add print function to runtime: %w", err)
-		}
-		err = jsext.ConfigureRuntime(vm)
-		if err != nil {
-			return nil, fmt.Errorf("can't configure runtime: %w", err)
-		}
-		vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-		_, err = vm.RunString(string(script))
-		if err != nil {
-			return nil, fmt.Errorf("script run failed: %w", err)
-		}
+		initGroup.Go(func() error {
+			vm := goja.New()
+			err := jsext.AddPrinter(vm, logger)
+			if err != nil {
+				return fmt.Errorf("can't add print function to runtime: %w", err)
+			}
+			err = jsext.ConfigureRuntime(vm)
+			if err != nil {
+				return fmt.Errorf("can't configure runtime: %w", err)
+			}
+			_, err = vm.RunString(string(script))
+			if err != nil {
+				return fmt.Errorf("script run failed: %w", err)
+			}
 
-		var f JSFilterFunc
-		var accessFnJSVal goja.Value
-		if ex := vm.Try(func() {
-			accessFnJSVal = vm.Get("access")
-		}); ex != nil {
-			return nil, fmt.Errorf("\"access\" function cannot be located in VM context: %w", err)
-		}
-		if accessFnJSVal == nil {
-			return nil, errors.New("\"access\" function is not defined")
-		}
-		err = vm.ExportTo(accessFnJSVal, &f)
-		if err != nil {
-			return nil, fmt.Errorf("can't export \"access\" function from JS VM: %w", err)
-		}
+			var f JSFilterFunc
+			var accessFnJSVal goja.Value
+			if ex := vm.Try(func() {
+				accessFnJSVal = vm.Get("access")
+			}); ex != nil {
+				return fmt.Errorf("\"access\" function cannot be located in VM context: %w", err)
+			}
+			if accessFnJSVal == nil {
+				return errors.New("\"access\" function is not defined")
+			}
+			err = vm.ExportTo(accessFnJSVal, &f)
+			if err != nil {
+				return fmt.Errorf("can't export \"access\" function from JS VM: %w", err)
+			}
 
-		pool <- f
+			pool <- f
+			return nil
+		})
+	}
+
+	err = initGroup.Wait()
+	if err != nil {
+		return nil, err
 	}
 
 	return &JSFilter{
