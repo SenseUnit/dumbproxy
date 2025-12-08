@@ -10,7 +10,9 @@ import (
 	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/SenseUnit/dumbproxy/auth"
@@ -27,7 +29,7 @@ type HandlerDialer interface {
 	DialContext(ctx context.Context, net, address string) (net.Conn, error)
 }
 
-type ForwardFunc = func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error
+type ForwardFunc = func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser, network, address string) error
 
 type ProxyHandler struct {
 	auth          auth.Auth
@@ -114,6 +116,8 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 				username,
 				wrapH1ReqBody(io.NopCloser(io.LimitReader(rw.Reader, int64(buffered)))),
 				wrapH1RespWriter(conn),
+				"tcp",
+				req.RequestURI,
 			)
 			s.forward(
 				req.Context(),
@@ -123,17 +127,19 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 					localconn,
 				),
 				conn,
+				"tcp",
+				req.RequestURI,
 			)
 		} else {
 			s.logger.Debug("not rescuing remaining data in bufio.ReadWriter")
 			fmt.Fprintf(localconn, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)
-			s.forward(req.Context(), username, localconn, conn)
+			s.forward(req.Context(), username, localconn, conn, "tcp", req.RequestURI)
 		}
 	} else if req.ProtoMajor == 2 {
 		wr.Header()["Date"] = nil
 		wr.WriteHeader(http.StatusOK)
 		flush(wr)
-		s.forward(req.Context(), username, wrapH2(req.Body, wr), conn)
+		s.forward(req.Context(), username, wrapH2(req.Body, wr), conn, "tcp", req.RequestURI)
 	} else {
 		s.logger.Error("Unsupported protocol version: %s", req.Proto)
 		http.Error(wr, "Unsupported protocol version.", http.StatusBadRequest)
@@ -141,13 +147,28 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 	}
 }
 
+func addressFromURL(u *url.URL) string {
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		switch strings.ToLower(u.Scheme) {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	return net.JoinHostPort(host, port)
+}
+
 func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, username string) {
 	req.RequestURI = ""
 	forwardReqBody := newH1ReqBodyPipe()
 	origBody := req.Body
 	req.Body = forwardReqBody.Body()
+	address := addressFromURL(req.URL)
 	go func() {
-		s.forward(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody)
+		s.forward(req.Context(), username, wrapH1ReqBody(origBody), forwardReqBody, "tcp", address)
 	}()
 	if req.ProtoMajor == 2 {
 		req.URL.Scheme = "http" // We can't access :scheme pseudo-header, so assume http
@@ -171,7 +192,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 	copyHeader(wr.Header(), resp.Header)
 	wr.WriteHeader(resp.StatusCode)
 	flush(wr)
-	s.forward(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body))
+	s.forward(req.Context(), username, wrapH1RespWriter(wr), wrapH1ReqBody(resp.Body), "tcp", address)
 }
 
 func (s *ProxyHandler) HandleGetRandom(wr http.ResponseWriter, req *http.Request, username string) {

@@ -23,7 +23,7 @@ func PortForwardHandler(logger *clog.CondLogger, dialer HandlerDialer, address s
 				return fmt.Errorf("connect to %s failed: %w", address, err)
 			}
 			defer target.Close()
-			return forward(ctx, username, c, target)
+			return forward(ctx, username, c, target, "tcp", address)
 		}(); err != nil {
 			logger.Error("handler failure: %v", err)
 		}

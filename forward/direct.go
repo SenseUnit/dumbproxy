@@ -22,7 +22,7 @@ func futureCopyAndCloseWrite(c chan<- error, dst io.WriteCloser, src io.ReadClos
 	close(c)
 }
 
-func PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error {
+func PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser, _, _ string) error {
 	var err error
 	i2oErr := make(chan error, 1)
 	o2iErr := make(chan error, 1)

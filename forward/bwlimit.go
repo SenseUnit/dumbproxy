@@ -3,6 +3,7 @@ package forward
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -10,10 +11,77 @@ import (
 	"github.com/Snawoot/secache"
 	"github.com/Snawoot/secache/randmap"
 
+	clog "github.com/SenseUnit/dumbproxy/log"
 	"github.com/SenseUnit/dumbproxy/rate"
 )
 
 const copyChunkSize = 128 * 1024
+
+type LimitKind int
+
+const (
+	LimitKindNone LimitKind = iota
+	LimitKindStatic
+	LimitKindJS
+)
+
+type LimitSpec struct {
+	Kind LimitKind
+	Spec any
+}
+
+type StaticLimitSpec struct {
+	BPS      uint64
+	Burst    int64
+	Separate bool
+}
+
+type JSLimitSpec struct {
+	Filename  string
+	Instances int
+}
+
+type LimitParameters struct {
+	UploadBPS     float64 `json:"uploadBPS"`
+	UploadBurst   int64   `json:"uploadBurst"`
+	DownloadBPS   float64 `json:"downloadBPS"`
+	DownloadBurst int64   `json:"downloadBurst"`
+	GroupKey      *string `json:"groupKey"`
+	Separate      bool    `json:"separate"`
+}
+
+type LimitProvider = func(context.Context, string, string, string) (*LimitParameters, error)
+
+func ProviderFromSpec(spec LimitSpec, logger *clog.CondLogger) (LimitProvider, error) {
+	switch spec.Kind {
+	case LimitKindStatic:
+		staticSpec, ok := spec.Spec.(StaticLimitSpec)
+		if !ok {
+			return nil, fmt.Errorf("incorrect payload type in BW limit spec: %T", spec)
+		}
+		return func(_ context.Context, username, _, _ string) (*LimitParameters, error) {
+			return &LimitParameters{
+				UploadBPS:     float64(staticSpec.BPS),
+				UploadBurst:   staticSpec.Burst,
+				DownloadBPS:   float64(staticSpec.BPS),
+				DownloadBurst: staticSpec.Burst,
+				GroupKey:      &username,
+				Separate:      staticSpec.Separate,
+			}, nil
+		}, nil
+	case LimitKindJS:
+		jsSpec, ok := spec.Spec.(JSLimitSpec)
+		if !ok {
+			return nil, fmt.Errorf("incorrect payload type in BW limit spec: %T", spec)
+		}
+		j, err := NewJSLimitProvider(jsSpec.Filename, jsSpec.Instances, logger)
+		if err != nil {
+			return nil, err
+		}
+		return j.Parameters, nil
+	}
+	return nil, fmt.Errorf("unsupported BW limit kind %d", int(spec.Kind))
+}
 
 type cacheItem struct {
 	mux sync.RWMutex
@@ -38,17 +106,13 @@ func (i *cacheItem) unlock() {
 }
 
 type BWLimit struct {
-	bps      float64
-	burst    int64
-	separate bool
-	cache    secache.Cache[string, *cacheItem]
+	paramFn LimitProvider
+	cache   secache.Cache[string, *cacheItem]
 }
 
-func NewBWLimit(bytesPerSecond float64, burst int64, separate bool) *BWLimit {
+func NewBWLimit(p LimitProvider) *BWLimit {
 	return &BWLimit{
-		bps:      bytesPerSecond,
-		burst:    burst,
-		separate: separate,
+		paramFn: p,
 		cache: *(secache.New[string, *cacheItem](3, func(_ string, item *cacheItem) bool {
 			if item.tryLock() {
 				if item.ul.Tokens() >= float64(item.ul.Burst()) && item.dl.Tokens() >= float64(item.dl.Burst()) {
@@ -120,35 +184,46 @@ func (l *BWLimit) futureCopyAndCloseWrite(ctx context.Context, c chan<- error, r
 	close(c)
 }
 
-func (l *BWLimit) getRatelimiters(username string) (res *cacheItem) {
+func (l *BWLimit) getRatelimiters(ctx context.Context, username, network, address string) (*cacheItem, error) {
+	params, err := l.paramFn(ctx, username, network, address)
+	if err != nil {
+		return nil, err
+	}
+	groupKey := username
+	if params.GroupKey != nil {
+		groupKey = *params.GroupKey
+	}
+	var res *cacheItem
 	l.cache.Do(func(m *randmap.RandMap[string, *cacheItem]) {
 		var ok bool
-		res, ok = m.Get(username)
+		res, ok = m.Get(groupKey)
 		if ok {
 			res.rLock()
 		} else {
-			ul := rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
+			ul := rate.NewLimiter(rate.Limit(params.UploadBPS), max(copyChunkSize, params.UploadBurst))
 			dl := ul
-			if l.separate {
-				dl = rate.NewLimiter(rate.Limit(l.bps), max(copyChunkSize, l.burst))
+			if params.Separate {
+				dl = rate.NewLimiter(rate.Limit(params.DownloadBPS), max(copyChunkSize, params.DownloadBurst))
 			}
 			res = &cacheItem{
 				ul: ul,
 				dl: dl,
 			}
 			res.rLock()
-			l.cache.SetLocked(m, username, res)
+			l.cache.SetLocked(m, groupKey, res)
 		}
 		return
 	})
-	return
+	return res, nil
 }
 
-func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error {
-	ci := l.getRatelimiters(username)
+func (l *BWLimit) PairConnections(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser, network, address string) error {
+	ci, err := l.getRatelimiters(ctx, username, network, address)
+	if err != nil {
+		return fmt.Errorf("ratelimit parameter computarion failed for user %q: %w", username, err)
+	}
 	defer ci.rUnlock()
 
-	var err error
 	i2oErr := make(chan error, 1)
 	o2iErr := make(chan error, 1)
 	ctxErr := ctx.Done()
