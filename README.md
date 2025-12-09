@@ -378,6 +378,43 @@ function getProxy(req, dst, username) {
 > 
 > This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
 
+### Bandwidth limit definition by JS script
+
+dumbproxy can retrieve bandwidth limit parameters defined by result of `bwLimit` JS function from file specified by `-js-bw-limit` option.
+
+`bwLimit` function is invoked with the [same parameters](#access-filter-by-js-script) as the `access` function. But unlike `access` function it must return object defining bandwidth limit parameters.
+
+Example, equivalent to `-bw-limit 100000 -bw-limit-burst 1000000`:
+
+```js
+function bwLimit(req, dst, username) {
+    return {
+        uploadBPS: 100000,
+        uploadBurst: 1000000,
+        downloadBPS: 100000,
+        downloadBurst: 1000000,
+    };
+}
+```
+
+Following properties of returned object are recognized:
+
+* **uploadBPS** *(Number)* - upload limit rate value.
+* **uploadBurst** *(Number)* - upload limit burst value.
+* **downloadBPS** *(Number)* - download limit rate value. Ignored if `separate` property is false.
+* **downloadBurst** *(Number)* - download limit burst value. Ignored if `separate` property is false.
+* **groupKey** *(String)* - aggregation key for limits. All connections with the same `groupKey` value are accounted by one exact rate limit. If value is `null` or not set, username will be used as aggregation key.
+* **separate** *(Boolean)* - account upload and download in separate limiters.
+
+> [!NOTE]  
+> `bwLimit` can be invoked more than once per request.
+
+> [!NOTE]  
+> Numeric values of limit parameters are used to (re-)create rate limit object, but do not update existing object unless it is evicted from cache naturally (which happens only if it has full bucket and no connections holding a shared lock on it).
+
+> [!NOTE]  
+> `resolvedHost` property of destination address object is always null for `bwLimit` invocations because this information is not available in this context. Only `originalHost` and `port` are available.
+
 ### Scripting functions
 
 Following builtin functions are addionally available within JS scripts:
@@ -515,7 +552,7 @@ Usage of /home/user/go/bin/dumbproxy:
     	allow multiple server instances on the same port
   -bind-unix-socket value
     	Unix domain socket to listen to, overrides bind-address if set.
-  -bw-limit uint
+  -bw-limit value
     	per-user bandwidth limit in bytes per second
   -bw-limit-burst int
     	allowed burst size for bandwidth limit, how many "tokens" can fit into leaky bucket
@@ -555,6 +592,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	path to JS script file with the "access" filter function
   -js-access-filter-instances int
     	number of JS VM instances to handle access filter requests (default 4)
+  -js-bw-limit value
+    	path to JS script with "bwLimit" function. Overrides every other BW limit option
+  -js-bw-limit-instances int
+    	number of JS VM instances to handle requests for BW limit parameters (default 4)
   -js-proxy-router value
     	path to JS script file with the "getProxy" function
   -js-proxy-router-instances int
@@ -570,7 +611,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -min-tls-version value
     	minimum TLS version accepted by server (default TLS12)
   -mode value
-    	proxy operation mode (http/socks5/stdio) (default http)
+    	proxy operation mode (http/socks5/stdio/port-forward) (default http)
   -passwd string
     	update given htpasswd file and add/set password for username. Username and password can be passed as positional arguments or requested interactively
   -passwd-cost int

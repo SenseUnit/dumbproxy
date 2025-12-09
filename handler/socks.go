@@ -70,7 +70,7 @@ func SOCKSHandler(dialer HandlerDialer, logger *clog.CondLogger, forward Forward
 			return fmt.Errorf("failed to send reply, %v", err)
 		}
 
-		return forward(ctx, username, wrapSOCKS(request.Reader, writer), target)
+		return forward(ctx, username, wrapSOCKS(request.Reader, writer), target, "tcp", request.DestAddr.String())
 	}
 }
 

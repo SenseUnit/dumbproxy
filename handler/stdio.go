@@ -20,7 +20,7 @@ func StdIOHandler(d HandlerDialer, logger *clog.CondLogger, forward ForwardFunc)
 		}
 		defer target.Close()
 
-		return forward(ctx, "", dialer.NewPipeConn(reader, writer), target)
+		return forward(ctx, "", dialer.NewPipeConn(reader, writer), target, "tcp", dstAddress)
 	}
 }
 

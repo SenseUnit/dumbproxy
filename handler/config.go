@@ -1,9 +1,6 @@
 package handler
 
 import (
-	"context"
-	"io"
-
 	"github.com/SenseUnit/dumbproxy/auth"
 	clog "github.com/SenseUnit/dumbproxy/log"
 )
@@ -19,7 +16,7 @@ type Config struct {
 	Logger *clog.CondLogger
 	// Forward optionally specifies custom connection pairing function
 	// which does actual data forwarding.
-	Forward func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser) error
+	Forward ForwardFunc
 	// UserIPHints specifies whether allow IP hints set by user or not
 	UserIPHints bool
 }

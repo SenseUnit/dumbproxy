@@ -3,10 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/csv"
 	"encoding/hex"
 	"errors"
@@ -23,7 +20,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -35,7 +31,6 @@ import (
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
-	"golang.org/x/crypto/ssh/terminal"
 
 	"github.com/SenseUnit/dumbproxy/access"
 	"github.com/SenseUnit/dumbproxy/auth"
@@ -318,7 +313,7 @@ type CLIArgs struct {
 	minTLSVersion            TLSVersionArg
 	maxTLSVersion            TLSVersionArg
 	tlsALPNEnabled           bool
-	bwLimit                  uint64
+	bwLimit                  forward.LimitSpec
 	bwBurst                  int64
 	bwSeparate               bool
 	dnsServers               []string
@@ -331,6 +326,7 @@ type CLIArgs struct {
 	jsAccessFilter           string
 	jsAccessFilterInstances  int
 	jsProxyRouterInstances   int
+	jsBWLimitInstances       int
 	proxyproto               bool
 	shutdownTimeout          time.Duration
 }
@@ -442,7 +438,28 @@ func parse_args() *CLIArgs {
 	flag.Var(&args.minTLSVersion, "min-tls-version", "minimum TLS version accepted by server")
 	flag.Var(&args.maxTLSVersion, "max-tls-version", "maximum TLS version accepted by server")
 	flag.BoolVar(&args.tlsALPNEnabled, "tls-alpn-enabled", true, "enable application protocol negotiation with TLS ALPN extension")
-	flag.Uint64Var(&args.bwLimit, "bw-limit", 0, "per-user bandwidth limit in bytes per second")
+	flag.Func("bw-limit", "per-user bandwidth limit in bytes per second", func(p string) error {
+		num, err := strconv.ParseUint(p, 10, 64)
+		if err != nil {
+			return err
+		}
+		args.bwLimit = forward.LimitSpec{
+			Kind: forward.LimitKindStatic,
+			Spec: forward.StaticLimitSpec{
+				BPS: num,
+			},
+		}
+		return nil
+	})
+	flag.Func("js-bw-limit", "path to JS script with \"bwLimit\" function. Overrides every other BW limit option", func(p string) error {
+		args.bwLimit = forward.LimitSpec{
+			Kind: forward.LimitKindJS,
+			Spec: forward.JSLimitSpec{
+				Filename: p,
+			},
+		}
+		return nil
+	})
 	flag.Int64Var(&args.bwBurst, "bw-limit-burst", 0, "allowed burst size for bandwidth limit, how many \"tokens\" can fit into leaky bucket")
 	flag.BoolVar(&args.bwSeparate, "bw-limit-separate", false, "separate upload and download bandwidth limits")
 	flag.Func("dns-server", "nameserver specification (udp://..., tcp://..., https://..., tls://..., doh://..., dot://..., default://). Option can be used multiple times for parallel use of multiple nameservers. Empty string resets the list", func(p string) error {
@@ -462,6 +479,7 @@ func parse_args() *CLIArgs {
 	flag.StringVar(&args.jsAccessFilter, "js-access-filter", "", "path to JS script file with the \"access\" filter function")
 	flag.IntVar(&args.jsAccessFilterInstances, "js-access-filter-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle access filter requests")
 	flag.IntVar(&args.jsProxyRouterInstances, "js-proxy-router-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle proxy router requests")
+	flag.IntVar(&args.jsProxyRouterInstances, "js-bw-limit-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle requests for BW limit parameters")
 	flag.Func("js-proxy-router", "path to JS script file with the \"getProxy\" function", func(p string) error {
 		args.proxy = append(args.proxy, proxyArg{false, p})
 		return nil
@@ -470,6 +488,25 @@ func parse_args() *CLIArgs {
 	flag.DurationVar(&args.shutdownTimeout, "shutdown-timeout", 1*time.Second, "grace period during server shutdown")
 	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
+	// pull up remaining parameters from other BW-related arguments
+	switch args.bwLimit.Kind {
+	case forward.LimitKindNone:
+	case forward.LimitKindStatic:
+		o := args.bwLimit.Spec.(forward.StaticLimitSpec)
+		args.bwLimit.Spec = forward.StaticLimitSpec{
+			BPS:      o.BPS,
+			Burst:    args.bwBurst,
+			Separate: args.bwSeparate,
+		}
+	case forward.LimitKindJS:
+		o := args.bwLimit.Spec.(forward.JSLimitSpec)
+		args.bwLimit.Spec = forward.JSLimitSpec{
+			Filename:  o.Filename,
+			Instances: args.jsBWLimitInstances,
+		}
+	default:
+		panic("unexpected BW limit kind in arg parse")
+	}
 	args.positionalArgs = flag.Args()
 	return args
 }
@@ -548,6 +585,9 @@ func run() int {
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
 	jsRouterLogger := clog.NewCondLogger(log.New(logWriter, "JSROUTER: ",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
+	jsLimitLogger := clog.NewCondLogger(log.New(logWriter, "JSLIMIT :",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
 
@@ -635,12 +675,13 @@ func run() int {
 
 	// handler requisites
 	forwarder := forward.PairConnections
-	if args.bwLimit != 0 {
-		forwarder = forward.NewBWLimit(
-			float64(args.bwLimit),
-			args.bwBurst,
-			args.bwSeparate,
-		).PairConnections
+	if args.bwLimit.Kind != forward.LimitKindNone {
+		limitProvider, err := forward.ProviderFromSpec(args.bwLimit, jsLimitLogger)
+		if err != nil {
+			mainLogger.Critical("Failed to create BW limit parameters provider: %v", err)
+			return 3
+		}
+		forwarder = forward.NewBWLimit(limitProvider).PairConnections
 	}
 
 	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -974,132 +1015,6 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	return &cfg, nil
 }
 
-func list_ciphers() {
-	for _, cipher := range tls.CipherSuites() {
-		fmt.Println(cipher.Name)
-	}
-}
-
-func list_curves() {
-	for _, curve := range tlsutil.Curves() {
-		fmt.Println(curve.String())
-	}
-}
-
-func passwd(filename string, cost int, args ...string) error {
-	var (
-		username, password, password2 string
-		err                           error
-	)
-
-	if len(args) > 0 {
-		username = args[0]
-	} else {
-		username, err = prompt("Enter username: ", false)
-		if err != nil {
-			return fmt.Errorf("can't get username: %w", err)
-		}
-	}
-
-	if len(args) > 1 {
-		password = args[1]
-	} else {
-		password, err = prompt("Enter password: ", true)
-		if err != nil {
-			return fmt.Errorf("can't get password: %w", err)
-		}
-		password2, err = prompt("Repeat password: ", true)
-		if err != nil {
-			return fmt.Errorf("can't get password (repeat): %w", err)
-		}
-		if password != password2 {
-			return fmt.Errorf("passwords do not match")
-		}
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
-	if err != nil {
-		return fmt.Errorf("can't generate password hash: %w", err)
-	}
-
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return fmt.Errorf("can't open file: %w", err)
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(fmt.Sprintf("%s:%s\n", username, hash))
-	if err != nil {
-		return fmt.Errorf("can't write to file: %w", err)
-	}
-
-	return nil
-}
-
-func hmacSign(args ...string) error {
-	if len(args) != 3 {
-		fmt.Fprintln(os.Stderr, "Usage:")
-		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintln(os.Stderr, "dumbproxy -hmac-sign <HMAC key> <username> <validity duration>")
-		fmt.Fprintln(os.Stderr, "")
-		return errors.New("bad command line arguments")
-	}
-
-	secret, err := hex.DecodeString(args[0])
-	if err != nil {
-		return fmt.Errorf("unable to hex-decode HMAC secret: %w", err)
-	}
-
-	validity, err := time.ParseDuration(args[2])
-	if err != nil {
-		return fmt.Errorf("unable to parse validity duration: %w", err)
-	}
-
-	expire := time.Now().Add(validity).Unix()
-	mac := auth.CalculateHMACSignature(secret, args[1], expire)
-	token := auth.HMACToken{
-		Expire: expire,
-	}
-	copy(token.Signature[:], mac)
-
-	var resBuf bytes.Buffer
-	enc := base64.NewEncoder(base64.RawURLEncoding, &resBuf)
-	if err := binary.Write(enc, binary.BigEndian, &token); err != nil {
-		return fmt.Errorf("token encoding failed: %w", err)
-	}
-	enc.Close()
-
-	fmt.Println("Username:", args[1])
-	fmt.Println("Password:", resBuf.String())
-	return nil
-}
-
-func hmacGenKey(args ...string) error {
-	buf := make([]byte, auth.HMACSignatureSize)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Errorf("CSPRNG failure: %w", err)
-	}
-	fmt.Println(hex.EncodeToString(buf))
-	return nil
-}
-
-func prompt(prompt string, secure bool) (string, error) {
-	var input string
-	fmt.Print(prompt)
-
-	if secure {
-		b, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return "", err
-		}
-		input = string(b)
-		fmt.Println()
-	} else {
-		fmt.Scanln(&input)
-	}
-	return input, nil
-}
-
 func readConfig(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -1142,14 +1057,6 @@ func readConfig(filename string) error {
 		}
 	}
 	return nil
-}
-
-func version() string {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "unknown"
-	}
-	return bi.Main.Version
 }
 
 func main() {
