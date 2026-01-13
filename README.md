@@ -81,6 +81,10 @@ docker run -d \
 sudo snap install dumbproxy
 ```
 
+#### easy-dp
+
+There is a simple shell script available for complete installation of dumbproxy on a fresh Linux server: https://github.com/Snawoot/easy-dp
+
 ## Usage
 
 Just run program and it'll start accepting connections on port 8080 (default).
