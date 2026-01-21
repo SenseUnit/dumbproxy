@@ -425,6 +425,7 @@ Following builtin functions are addionally available within JS scripts:
 
 * `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
 * `readFile(path: string): string` - read file from *path* and return its content as a string.
+* `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:
 

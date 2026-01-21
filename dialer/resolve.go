@@ -2,6 +2,7 @@ package dialer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -72,6 +73,10 @@ func (nrd NameResolvingDialer) DialContext(ctx context.Context, network, address
 			return conn, nil
 		}
 		dialErr = multierror.Append(dialErr, err)
+		var sae dto.StopAddressIteration
+		if errors.As(err, &sae) {
+			break
+		}
 	}
 
 	return nil, fmt.Errorf("failed to dial %s: %w", address, dialErr)
