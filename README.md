@@ -247,9 +247,17 @@ dumbproxy -bind-address 127.0.0.1:8080 -proxy 'https://example.org?cert=cert.pem
 ### Using with Android
 
 1. Run proxy as in [examples](#usage) above.
-2. Install Adguard on your Android: [Guide](https://adguard.com/en/adguard-android/overview.html).
-3. Follow [this guide](https://adguard.com/en/blog/configure-proxy.html#configuringproxyinadguardforandroid), skipping server configuration. Use proxy type HTTPS if you set up TLS-enabled server or else use HTTP type.
-4. Enjoy!
+2. Install [DumDum](https://dumdum.dev) on your Android device from [F-Droid](https://f-droid.org/packages/app.dumdum/) or [GitHub](https://github.com/Project-Mandarin/DumDum/releases).
+3. Open DumDum, tap ➕ (in the upper right corner) and choose "HTTP(S)".
+4. Configure a connection:
+
+   <img width="335" height="450" alt="dumdum" src="https://github.com/user-attachments/assets/c7ae85ca-61eb-4167-965b-6245a411eaf7" />
+
+> [!IMPORTANT]
+> For HTTPS, make sure the "Encryption" parameter is set to "tls".
+5. Save settings by tapping ✔️.
+6. If a self-signed certificate is used, go to "Settings > Advanced > Connection" and enable "Ignore Proxy SSL Certificate."
+7. Enjoy!
 
 ## Authentication
 
