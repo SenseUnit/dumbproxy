@@ -52,3 +52,11 @@ func OrigDstFromContext(ctx context.Context) (string, bool) {
 func OrigDstToContext(ctx context.Context, dst string) context.Context {
 	return context.WithValue(ctx, origDstKey{}, dst)
 }
+
+type StopAddressIteration struct{}
+
+func (_ StopAddressIteration) Error() string {
+	return "address iteration halted"
+}
+
+var _ error = StopAddressIteration{}
