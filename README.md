@@ -39,7 +39,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
   * Optional parroting of TLS fingerprints of popular software such as web browsers.
   * Optional countermeasures against TLS-in-TLS detection (available when both client and server are dumbproxy).
 * systemd socket activation
-* [Proxy protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) support for working behind a reverse proxy (HAProxy, Nginx)
+* [Proxy protocol](https://github.com/haproxy/haproxy/blob/master/doc/proxy-protocol.txt) support for instances working behind a reverse proxy (HAProxy, Nginx)
 * Scripting with JavaScript:
   * Access filter by JS function
   * Upstream proxy selection by JS function
