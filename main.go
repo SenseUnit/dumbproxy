@@ -328,6 +328,7 @@ type CLIArgs struct {
 	jsProxyRouterInstances   int
 	jsBWLimitInstances       int
 	proxyproto               bool
+	tt                       bool
 	shutdownTimeout          time.Duration
 }
 
@@ -485,6 +486,7 @@ func parse_args() *CLIArgs {
 		return nil
 	})
 	flag.BoolVar(&args.proxyproto, "proxyproto", false, "listen proxy protocol")
+	flag.BoolVar(&args.tt, "trusttunnel", true, "enable TrustTunnel protocol extensions")
 	flag.DurationVar(&args.shutdownTimeout, "shutdown-timeout", 1*time.Second, "grace period during server shutdown")
 	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
@@ -590,6 +592,9 @@ func run() int {
 	jsLimitLogger := clog.NewCondLogger(log.New(logWriter, "JSLIMIT :",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	ttDemuxLogger := clog.NewCondLogger(log.New(logWriter, "TTDEMUX :",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
 	// setup auth provider
 	authProvider, err := auth.NewAuth(args.auth, authLogger)
@@ -671,6 +676,11 @@ func run() int {
 		)
 	} else {
 		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
+	}
+
+	// unholy plug
+	if args.tt {
+		dialerRoot = dialer.NewTTInterceptor(dialerRoot, ttDemuxLogger)
 	}
 
 	// handler requisites
