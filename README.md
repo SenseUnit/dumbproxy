@@ -640,6 +640,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	grace period during server shutdown (default 1s)
   -tls-alpn-enabled
     	enable application protocol negotiation with TLS ALPN extension (default true)
+  -trusttunnel
+    	enable TrustTunnel protocol extensions (default true)
   -unix-sock-mode value
     	set file mode for bound unix socket
   -unix-sock-unlink
