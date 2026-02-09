@@ -8,6 +8,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
 ## Features
 
 * Multiple protocol support: both HTTP and SOCKS5 are supported
+  * [TrustTunnel](https://trusttunnel.org/) extensions for UDP and healthchecks are supported as well, which means dumbproxy server running with HTTPS enabled is compatible with TrustTunnel client.
 * Cross-platform (Windows/Mac OS/Linux/Android (via shell)/\*BSD)
 * Deployment with a single self-contained binary
 * Zero-configuration
