@@ -400,6 +400,53 @@ func (_ *udpDemuxConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
+type icmpDemuxConn struct {
+}
+
+func newICMPDemuxConn(ctx context.Context, logger *clog.CondLogger) (*icmpDemuxConn, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *icmpDemuxConn) Read(b []byte) (n int, err error) {
+	// TODO: implement Read
+	return 0, net.ErrClosed
+}
+
+func (m *icmpDemuxConn) Write(b []byte) (n int, err error) {
+	// TODO: implement Write
+	return 0, net.ErrClosed
+}
+
+func (m *icmpDemuxConn) Close() error {
+	// TODO: implement Close
+	return nil
+}
+func (m *icmpDemuxConn) LocalAddr() net.Addr {
+	return dummyAddr{
+		network: "demux",
+		address: "<dummy local address>",
+	}
+}
+
+func (m *icmpDemuxConn) RemoteAddr() net.Addr {
+	return dummyAddr{
+		network: "demux",
+		address: "<dummy local address>",
+	}
+}
+
+func (_ *icmpDemuxConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (_ *icmpDemuxConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (_ *icmpDemuxConn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
 type TTInterceptor struct {
 	next   Dialer
 	logger *clog.CondLogger
@@ -421,12 +468,12 @@ func (d *TTInterceptor) DialContext(ctx context.Context, network, address string
 	case "_check":
 		return nullConn{}, nil
 	case "_udp2":
+		return newUDPDemuxConn(ctx, d.logger), nil
 	case "_icmp":
-		return nil, errors.New("not implemented")
+		return newICMPDemuxConn(ctx, d.logger)
 	default:
 		return d.next.DialContext(ctx, network, address)
 	}
-	return newUDPDemuxConn(ctx, d.logger), nil
 }
 
 func (d *TTInterceptor) WantsHostname(ctx context.Context, network, address string) bool {
