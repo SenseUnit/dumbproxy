@@ -26,14 +26,17 @@ description:
       circumvention and easy deployment.
     documentation: https://github.com/SenseUnit/dumbproxy/blob/master/README.md
     features:
-      - HTTP/HTTPS and SOCKS5 are supported
-      - Cross-platform (Windows/Mac OS/Linux/Android (via shell)/*BSD)
+      - HTTP proxy
+      - HTTPS proxy
+      - SOCKS5 proxy
+      - TrustTunnel server
+      - Proxy chaining
       - Deployment with a single self-contained binary
       - TCP and UDP connection forwarding
       - Flexible authentication
       - HTTP/2 support
       - Censorship circumvention
-      - Upstream proxy support
+      - DPI resistant
       - Extensible with scripting
       - Flexible bandwidth limiting
       - TLS support with optional automatic certificates
