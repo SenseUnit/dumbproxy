@@ -17,7 +17,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
   * Via auto-reloaded NCSA httpd-style passwords file
   * Via static login and password
   * Via HMAC signatures provisioned by central authority (e.g. some webservice)
-  * Via Redis or Redis Cluster database
+  * Via Valkey or Valkey Cluster database
   * Chaining of all above in order to lookup multiple sources or provide custom rejection response.
 * Supports TLS operation mode (HTTP(S) proxy over TLS)
   * Supports client authentication with client TLS certificates
@@ -284,13 +284,8 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `reload` - interval for certificate blacklist file reload, if it was modified since last load. Use negative duration to disable autoreload. Default: `15s`.
   * `next` - optional URL specifying the next auth provider to chain to, if cert authentication succeeded. Example: `-auth 'cert://?next=static%3A%2F%2F%3Fusername%3Dadmin%26password%3D123456'`.
   * `else` - optional URL specifying the next auth provider to chain to, if authentication failed.
-* `redis` - use external Redis database to lookup password verifiers for users. The password format is similar to `basicfile` mode or `htpasswd` encoding except username goes into Redis key name, colon is skipped and the rest goes to value of this key. For example, login-password pair `test` / `123456` can be encoded as Redis key `test` with value `$2y$05$zs1EJayCIyYtG.NQVzu9SeNvMP0XYWa42fQv.XNDx33wwbg98SnUq`. Example of auth parameter: `-auth 'redis://?url=redis%3A//default%3A123456Y%40redis-14623.c531.europe-west3-1.gce.redns.redis-cloud.com%3A17954/0&key_prefix=auth_'`. Parameters:
-  * `url` - URL specifying Redis instance to connect to. See [ParseURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseURL) documentation for the complete specification of Redis URL format.
-  * `key_prefix` - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
-  * `hidden_domain` - same as in `static` provider.
-  * `else` - optional URL specifying the next auth provider to chain to, if authentication failed.
-* `redis-cluster` - same as Redis, but uses Redis Cluster client instead.
-  * `url` - URL specifying Redis instance to connect to. See [ParseClusterURL](https://pkg.go.dev/github.com/redis/go-redis/v9#ParseClusterURL) documentation for the complete specification of Redis URL format.
+* `valkey` - use external Redis database to lookup password verifiers for users. The password format is similar to `basicfile` mode or `htpasswd` encoding except username goes into Redis key name, colon is skipped and the rest goes to value of this key. For example, login-password pair `test` / `123456` can be encoded as Redis key `test` with value `$2y$05$zs1EJayCIyYtG.NQVzu9SeNvMP0XYWa42fQv.XNDx33wwbg98SnUq`. Example of auth parameter: `-auth 'redis://?url=redis%3A//default%3A123456Y%40redis-14623.c531.europe-west3-1.gce.redns.redis-cloud.com%3A17954/0&key_prefix=auth_'`. Parameters:
+  * `url` - URL specifying Valkey instance to connect to. See [Redis URL specification](https://github.com/redis/redis-specifications/blob/master/uri/redis.txt) for the complete specification of Redis URL format.
   * `key_prefix` - prefix to prepend to each key before lookup. Helps isolate keys under common prefix. Default is empty string (`""`).
   * `hidden_domain` - same as in `static` provider.
   * `else` - optional URL specifying the next auth provider to chain to, if authentication failed.
@@ -540,12 +535,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	custom ACME endpoint (default "https://acme-v02.api.letsencrypt.org/directory")
   -autocert-cache-enc-key value
     	hex-encoded encryption key for cert cache entries. Can be also set with DUMBPROXY_CACHE_ENC_KEY environment variable
-  -autocert-cache-redis value
-    	use Redis URL for autocert cache
-  -autocert-cache-redis-cluster value
-    	use Redis Cluster URL for autocert cache
-  -autocert-cache-redis-prefix string
-    	prefix to use for keys in Redis or Redis Cluster cache
+  -autocert-cache-valkey value
+    	use Valkey URL for autocert cache
+  -autocert-cache-valkey-prefix string
+    	prefix to use for keys in Valkey or Valkey Cluster cache
   -autocert-dir value
     	use directory path for autocert cache
   -autocert-email string
