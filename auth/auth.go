@@ -31,10 +31,8 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 		return NewHMACAuth(url, logger)
 	case "cert":
 		return NewCertAuth(url, logger)
-	case "redis":
-		return NewRedisAuth(url, false, logger)
-	case "redis-cluster":
-		return NewRedisAuth(url, true, logger)
+	case "valkey":
+		return NewValkeyAuth(url, logger)
 	case "none":
 		return NoAuth{}, nil
 	case "reject-http", "reject-https":

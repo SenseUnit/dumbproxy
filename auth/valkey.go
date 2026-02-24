@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,49 +11,39 @@ import (
 	"sync"
 	"time"
 
-	clog "github.com/SenseUnit/dumbproxy/log"
-	"github.com/hashicorp/go-multierror"
+	"github.com/valkey-io/valkey-go"
 
-	"github.com/redis/go-redis/v9"
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
-type cmdableCloser interface {
-	redis.Cmdable
-	io.Closer
-}
-
-type RedisAuth struct {
+type ValkeyAuth struct {
 	logger       *clog.CondLogger
 	hiddenDomain string
-	r            cmdableCloser
+	c            valkey.Client
 	keyPrefix    string
 	stopOnce     sync.Once
 	next         Auth
 }
 
-func NewRedisAuth(param_url *url.URL, cluster bool, logger *clog.CondLogger) (*RedisAuth, error) {
+func NewValkeyAuth(param_url *url.URL, logger *clog.CondLogger) (*ValkeyAuth, error) {
 	values, err := url.ParseQuery(param_url.RawQuery)
 	if err != nil {
 		return nil, err
 	}
-	auth := &RedisAuth{
+	auth := &ValkeyAuth{
 		logger:       logger,
 		hiddenDomain: strings.ToLower(values.Get("hidden_domain")),
 		keyPrefix:    values.Get("key_prefix"),
 	}
-	if cluster {
-		opts, err := redis.ParseClusterURL(values.Get("url"))
-		if err != nil {
-			return nil, err
-		}
-		auth.r = redis.NewClusterClient(opts)
-	} else {
-		opts, err := redis.ParseURL(values.Get("url"))
-		if err != nil {
-			return nil, err
-		}
-		auth.r = redis.NewClient(opts)
+	opts, err := valkey.ParseURL(values.Get("url"))
+	if err != nil {
+		return nil, fmt.Errorf("valkey server URL parsing failed: %w", err)
 	}
+	client, err := valkey.NewClient(opts)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create valkey client: %w", err)
+	}
+	auth.c = client
 	if nextAuth := values.Get("else"); nextAuth != "" {
 		nap, err := NewAuth(nextAuth, logger)
 		if err != nil {
@@ -65,24 +54,24 @@ func NewRedisAuth(param_url *url.URL, cluster bool, logger *clog.CondLogger) (*R
 	return auth, nil
 }
 
-func (auth *RedisAuth) Valid(user, password, userAddr string) bool {
+func (auth *ValkeyAuth) Valid(user, password, userAddr string) bool {
 	ctx, cl := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cl()
-	encodedPasswd, err := auth.r.Get(ctx, auth.keyPrefix+user).Result()
+	encodedPasswd, err := auth.c.Do(ctx, auth.c.B().Get().Key(auth.keyPrefix+user).Build()).ToString()
 	if err != nil {
-		auth.logger.Debug("error fetching key %q from Redis: %v", auth.keyPrefix+user, err)
+		auth.logger.Debug("error fetching key %q from Valkey: %v", auth.keyPrefix+user, err)
 		return tryValid(auth.next, auth.logger, user, password, userAddr)
 	}
 	matcher, err := makePasswdMatcher(encodedPasswd)
 	if err != nil {
-		auth.logger.Debug("can't create password matcher from Redis key %q: %v", auth.keyPrefix+user, err)
+		auth.logger.Debug("can't create password matcher from Valkey key %q: %v", auth.keyPrefix+user, err)
 		return tryValid(auth.next, auth.logger, user, password, userAddr)
 	}
 
 	return matcher.MatchesPassword(password) || tryValid(auth.next, auth.logger, user, password, userAddr)
 }
 
-func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
+func (auth *ValkeyAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
 	hdr := req.Header.Get("Proxy-Authorization")
 	if hdr == "" {
 		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
@@ -106,14 +95,14 @@ func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req
 	login := pair[0]
 	password := pair[1]
 
-	encodedPasswd, err := auth.r.Get(ctx, auth.keyPrefix+login).Result()
+	encodedPasswd, err := auth.c.Do(ctx, auth.c.B().Get().Key(auth.keyPrefix+login).Build()).ToString()
 	if err != nil {
-		auth.logger.Debug("error fetching key %q from Redis: %v", auth.keyPrefix+login, err)
+		auth.logger.Debug("error fetching key %q from Valkey: %v", auth.keyPrefix+login, err)
 		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 	matcher, err := makePasswdMatcher(encodedPasswd)
 	if err != nil {
-		auth.logger.Debug("can't create password matcher from Redis key %q: %v", auth.keyPrefix+login, err)
+		auth.logger.Debug("can't create password matcher from Valkey key %q: %v", auth.keyPrefix+login, err)
 		return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 	}
 
@@ -135,17 +124,15 @@ func (auth *RedisAuth) Validate(ctx context.Context, wr http.ResponseWriter, req
 	return requireBasicAuth(ctx, wr, req, auth.hiddenDomain, auth.next)
 }
 
-func (auth *RedisAuth) Close() error {
+func (auth *ValkeyAuth) Close() error {
 	var err error
 	auth.stopOnce.Do(func() {
 		if auth.next != nil {
 			if closeErr := auth.next.Close(); closeErr != nil {
-				err = multierror.Append(err, closeErr)
+				err = closeErr
 			}
 		}
-		if closeErr := auth.r.Close(); closeErr != nil {
-			err = multierror.Append(err, closeErr)
-		}
+		auth.c.Close()
 	})
 	return err
 }
