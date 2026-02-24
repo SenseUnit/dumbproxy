@@ -1,8 +1,6 @@
 module github.com/SenseUnit/dumbproxy
 
-go 1.24.0
-
-toolchain go1.24.6
+go 1.24.9
 
 require (
 	github.com/Snawoot/secache v0.2.1
@@ -33,6 +31,7 @@ require (
 	github.com/google/pprof v0.0.0-20260202012954-cb029daf43ef // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/klauspost/compress v1.18.3 // indirect
+	github.com/valkey-io/valkey-go v1.0.72 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/term v0.39.0 // indirect
 	golang.org/x/text v0.33.0 // indirect

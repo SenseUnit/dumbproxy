@@ -195,8 +195,8 @@ type cacheKind int
 
 const (
 	cacheKindDir cacheKind = iota
-	cacheKindRedis
-	cacheKindRedisCluster
+	cacheKindValkey
+	cacheKindValkeyCluster
 )
 
 type autocertCache struct {
@@ -296,7 +296,7 @@ type CLIArgs struct {
 	autocert                 bool
 	autocertWhitelist        CSVArg
 	autocertCache            autocertCache
-	autocertCacheRedisPrefix string
+	autocertCacheValkeyPrefix string
 	autocertACME             string
 	autocertEmail            string
 	autocertHTTP             string
@@ -404,21 +404,14 @@ func parse_args() *CLIArgs {
 		}
 		return nil
 	})
-	flag.Func("autocert-cache-redis", "use Redis URL for autocert cache", func(p string) error {
+	flag.Func("autocert-cache-valkey", "use Valkey URL for autocert cache", func(p string) error {
 		args.autocertCache = autocertCache{
-			kind:  cacheKindRedis,
+			kind:  cacheKindValkey,
 			value: p,
 		}
 		return nil
 	})
-	flag.Func("autocert-cache-redis-cluster", "use Redis Cluster URL for autocert cache", func(p string) error {
-		args.autocertCache = autocertCache{
-			kind:  cacheKindRedisCluster,
-			value: p,
-		}
-		return nil
-	})
-	flag.StringVar(&args.autocertCacheRedisPrefix, "autocert-cache-redis-prefix", "", "prefix to use for keys in Redis or Redis Cluster cache")
+	flag.StringVar(&args.autocertCacheValkeyPrefix, "autocert-cache-valkey-prefix", "", "prefix to use for keys in Valkey or Valkey Cluster cache")
 	flag.Var(&args.autocertCacheEncKey, "autocert-cache-enc-key", "hex-encoded encryption key for cert cache entries. Can be also set with "+envCacheEncKey+" environment variable")
 	flag.StringVar(&args.autocertACME, "autocert-acme", autocert.DefaultACMEDirectory, "custom ACME endpoint")
 	flag.StringVar(&args.autocertEmail, "autocert-email", "", "email used for ACME registration")
@@ -775,16 +768,10 @@ func run() int {
 		switch args.autocertCache.kind {
 		case cacheKindDir:
 			certCache = autocert.DirCache(args.autocertCache.value)
-		case cacheKindRedis:
-			certCache, err = certcache.RedisCacheFromURL(args.autocertCache.value, args.autocertCacheRedisPrefix)
+		case cacheKindValkey:
+			certCache, err = certcache.ValkeyCacheFromURL(args.autocertCache.value, args.autocertCacheValkeyPrefix)
 			if err != nil {
-				mainLogger.Critical("redis cache construction failed: %v", err)
-				return 3
-			}
-		case cacheKindRedisCluster:
-			certCache, err = certcache.RedisClusterCacheFromURL(args.autocertCache.value, args.autocertCacheRedisPrefix)
-			if err != nil {
-				mainLogger.Critical("redis cluster cache construction failed: %v", err)
+				mainLogger.Critical("valkey cache construction failed: %v", err)
 				return 3
 			}
 		default:
