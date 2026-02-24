@@ -22,14 +22,11 @@ import (
 type clientConnPool struct {
 	t *http2.Transport
 
-	mu sync.Mutex // TODO: maybe switch to RWMutex
-	// TODO: add support for sharing conns based on cert names
-	// (e.g. share conn for googleapis.com and appspot.com)
-	conns        map[string][]*http2.ClientConn // key is host:port
-	dialing      map[string]*dialCall           // currently in-flight dials
-	keys         map[*http2.ClientConn][]string
-	addConnCalls map[string]*addConnCall // in-flight addConnIfNeeded calls
-	prepare      func(context.Context, *http2.ClientConn) (*http2.ClientConn, error)
+	mu          sync.Mutex
+	conns       []*http2.ClientConn
+	dialing     *dialCall    // currently in-flight dial
+	addConnCall *addConnCall // in-flight addConnIfNeeded calls
+	prepare     func(context.Context, *http2.ClientConn) (*http2.ClientConn, error)
 }
 
 func (p *clientConnPool) GetClientConn(req *http.Request, addr string) (*http2.ClientConn, error) {
@@ -134,7 +131,7 @@ func (p *clientConnPool) getClientConn(req *http.Request, addr string, dialOnMis
 	}
 	for {
 		p.mu.Lock()
-		for _, cc := range p.conns[addr] {
+		for _, cc := range p.conns {
 			if cc.ReserveNewRequest() {
 				p.mu.Unlock()
 				return cc, nil
@@ -179,15 +176,12 @@ type dialCall struct {
 
 // requires p.mu is held.
 func (p *clientConnPool) getStartDialLocked(ctx context.Context, addr string) *dialCall {
-	if call, ok := p.dialing[addr]; ok {
+	if call := p.dialing; call != nil {
 		// A dial is already in-flight. Don't start another.
 		return call
 	}
 	call := &dialCall{p: p, done: make(chan struct{}), ctx: ctx}
-	if p.dialing == nil {
-		p.dialing = make(map[string]*dialCall)
-	}
-	p.dialing[addr] = call
+	p.dialing = call
 	go call.dial(call.ctx, addr)
 	return call
 }
@@ -197,7 +191,7 @@ func (c *dialCall) dial(ctx context.Context, addr string) {
 	c.res, c.err = c.p.dialClientConn(ctx, addr)
 
 	c.p.mu.Lock()
-	delete(c.p.dialing, addr)
+	c.p.dialing = nil
 	if c.err == nil {
 		c.p.addConnLocked(addr, c.res)
 	}
@@ -216,22 +210,20 @@ func (c *dialCall) dial(ctx context.Context, addr string) {
 // c is never closed.
 func (p *clientConnPool) addConnIfNeeded(key string, t *http2.Transport, c net.Conn) (used bool, err error) {
 	p.mu.Lock()
-	for _, cc := range p.conns[key] {
+	for _, cc := range p.conns {
 		if cc.CanTakeNewRequest() {
 			p.mu.Unlock()
 			return false, nil
 		}
 	}
-	call, dup := p.addConnCalls[key]
+	call := p.addConnCall
+	dup := call != nil
 	if !dup {
-		if p.addConnCalls == nil {
-			p.addConnCalls = make(map[string]*addConnCall)
-		}
 		call = &addConnCall{
 			p:    p,
 			done: make(chan struct{}),
 		}
-		p.addConnCalls[key] = call
+		p.addConnCall = call
 		go call.run(t, key, c)
 	}
 	p.mu.Unlock()
@@ -260,44 +252,25 @@ func (c *addConnCall) run(t *http2.Transport, key string, nc net.Conn) {
 	} else {
 		p.addConnLocked(key, cc)
 	}
-	delete(p.addConnCalls, key)
+	p.addConnCall = nil
 	p.mu.Unlock()
 	close(c.done)
 }
 
 // p.mu must be held
 func (p *clientConnPool) addConnLocked(key string, cc *http2.ClientConn) {
-	for _, v := range p.conns[key] {
+	for _, v := range p.conns {
 		if v == cc {
 			return
 		}
 	}
-	if p.conns == nil {
-		p.conns = make(map[string][]*http2.ClientConn)
-	}
-	if p.keys == nil {
-		p.keys = make(map[*http2.ClientConn][]string)
-	}
-	p.conns[key] = append(p.conns[key], cc)
-	p.keys[cc] = append(p.keys[cc], key)
+	p.conns = append(p.conns, cc)
 }
 
 func (p *clientConnPool) MarkDead(cc *http2.ClientConn) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, key := range p.keys[cc] {
-		vv, ok := p.conns[key]
-		if !ok {
-			continue
-		}
-		newList := filterOutClientConn(vv, cc)
-		if len(newList) > 0 {
-			p.conns[key] = newList
-		} else {
-			delete(p.conns, key)
-		}
-	}
-	delete(p.keys, cc)
+	p.conns = filterOutClientConn(p.conns, cc)
 }
 
 func filterOutClientConn(in []*http2.ClientConn, exclude *http2.ClientConn) []*http2.ClientConn {
