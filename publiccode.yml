@@ -1,0 +1,53 @@
+publiccodeYmlVersion: 0.5.0
+name: dumbproxy
+url: https://github.com/SenseUnit/dumbproxy
+softwareVersion: 1.42.1
+releaseDate: 2026-02-24
+platforms:
+  - windows
+  - mac
+  - linux
+  - android
+categories:
+  - communications
+  - it-security
+  - other
+organisation:
+  name: SenseUnit
+  uri: https://github.com/SenseUnit
+developmentStatus: stable
+softwareType: standalone/other
+description:
+  en:
+    localisedName: dumbproxy
+    shortDescription: Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
+    longDescription: Simple, scriptable, secure HTTP/SOCKS5 forward proxy. This
+      project is focused on flexible connection forwarding, censorship
+      circumvention and easy deployment.
+    documentation: https://github.com/SenseUnit/dumbproxy/blob/master/README.md
+    features:
+      - HTTP proxy
+      - HTTPS proxy
+      - SOCKS5 proxy
+      - TrustTunnel server
+      - Proxy chaining
+      - Deployment with a single self-contained binary
+      - TCP and UDP connection forwarding
+      - Flexible authentication
+      - HTTP/2 support
+      - Censorship circumvention
+      - DPI resistant
+      - Extensible with scripting
+      - Flexible bandwidth limiting
+      - TLS support with optional automatic certificates
+legal:
+  license: MIT
+maintenance:
+  type: internal
+  contacts:
+    - name: Vladislav Yarmak
+      email: vladislav-ex-dppc@vm-0.com
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - en
