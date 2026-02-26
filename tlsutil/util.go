@@ -12,6 +12,8 @@ import (
 	utls "github.com/refraction-networking/utls"
 )
 
+var sessionCache = tls.NewLRUClientSessionCache(0)
+
 func ExpectPeerName(name string, roots *x509.CertPool) func(cs tls.ConnectionState) error {
 	return func(cs tls.ConnectionState) error {
 		opts := x509.VerifyOptions{
@@ -170,7 +172,8 @@ func TLSConfigFromURL(u *url.URL) (*tls.Config, error) {
 		return nil, fmt.Errorf("unable to parse query string of proxy specification URL %q: %w", u.String(), err)
 	}
 	tlsConfig := &tls.Config{
-		ServerName: host,
+		ServerName:         host,
+		ClientSessionCache: sessionCache,
 	}
 	if params.Has("cafile") {
 		roots, err := LoadCAfile(params.Get("cafile"))
