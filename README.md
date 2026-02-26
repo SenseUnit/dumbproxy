@@ -640,6 +640,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	grace period during server shutdown (default 1s)
   -tls-alpn-enabled
     	enable application protocol negotiation with TLS ALPN extension (default true)
+  -tls-session-key value
+    	override TLS server session keys. Key must be provided as hex-encoded 32-byte string. This option can be repeated multiple times, first key will be used to create session tickets. Empty value resets the list.
   -trusttunnel
     	enable TrustTunnel protocol extensions (default true)
   -unix-sock-mode value
