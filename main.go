@@ -313,6 +313,7 @@ type CLIArgs struct {
 	minTLSVersion            TLSVersionArg
 	maxTLSVersion            TLSVersionArg
 	tlsALPNEnabled           bool
+	tlsSessionKeys           [][32]byte
 	bwLimit                  forward.LimitSpec
 	bwBurst                  int64
 	bwSeparate               bool
@@ -488,6 +489,22 @@ func parse_args() *CLIArgs {
 	flag.BoolVar(&args.proxyproto, "proxyproto", false, "listen proxy protocol")
 	flag.BoolVar(&args.tt, "trusttunnel", true, "enable TrustTunnel protocol extensions")
 	flag.DurationVar(&args.shutdownTimeout, "shutdown-timeout", 1*time.Second, "grace period during server shutdown")
+	flag.Func("tls-session-key", "override TLS server session keys. Key must be provided as hex-encoded 32-byte string. "+
+		"This option can be repeated multiple times, first key will be used to create session tickets. Empty value resets the list.", func(p string) error {
+		if len(p) == 0 {
+			args.tlsSessionKeys = nil
+			return nil
+		}
+		key, err := hex.DecodeString(p)
+		if err != nil {
+			return fmt.Errorf("unable to hex-decode TLS session key: %w", err)
+		}
+		if len(key) != 32 {
+			return fmt.Errorf("provided session key has length %d instead of 32", len(key))
+		}
+		args.tlsSessionKeys = append(args.tlsSessionKeys, [32]byte(key))
+		return nil
+	})
 	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
 	// pull up remaining parameters from other BW-related arguments
@@ -1021,6 +1038,9 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 		} else {
 			cfg.NextProtos = []string{"http/1.1"}
 		}
+	}
+	if len(args.tlsSessionKeys) > 0 {
+		cfg.SetSessionTicketKeys(args.tlsSessionKeys)
 	}
 	return &cfg, nil
 }
