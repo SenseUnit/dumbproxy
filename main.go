@@ -785,6 +785,7 @@ func run() int {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
 		}
+		listener = tlsutil.NewTaggedConnListener(listener) // attach DTO container
 		listener = tls.NewListener(listener, cfg)
 	} else if args.autocert {
 		// cert caching chain
@@ -850,6 +851,7 @@ func run() int {
 		if len(cfg.NextProtos) > 0 {
 			cfg.NextProtos = append(cfg.NextProtos, acme.ALPNProto)
 		}
+		listener = tlsutil.NewTaggedConnListener(listener) // attach DTO container
 		listener = tls.NewListener(listener, cfg)
 	}
 	defer listener.Close()
