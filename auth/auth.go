@@ -41,6 +41,8 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 		return NewRejectHTTPAuth(url, logger)
 	case "reject-static":
 		return NewStaticRejectAuth(url, logger)
+	case "tlsticket":
+		return NewTLSTicketAuth(url, logger)
 	default:
 		return nil, errors.New("Unknown auth scheme")
 	}
