@@ -314,6 +314,7 @@ type CLIArgs struct {
 	maxTLSVersion            TLSVersionArg
 	tlsALPNEnabled           bool
 	tlsSessionKeys           [][32]byte
+	tlsSameSessionKey        bool
 	bwLimit                  forward.LimitSpec
 	bwBurst                  int64
 	bwSeparate               bool
@@ -505,6 +506,7 @@ func parse_args() *CLIArgs {
 		args.tlsSessionKeys = append(args.tlsSessionKeys, [32]byte(key))
 		return nil
 	})
+	flag.BoolVar(&args.tlsSameSessionKey, "tls-same-session-key", true, "issue new TLS session tickets with the same key used for previous ticket")
 	flag.Func("config", "read configuration from file with space-separated keys and values", readConfig)
 	flag.Parse()
 	// pull up remaining parameters from other BW-related arguments
@@ -1006,7 +1008,7 @@ func run() int {
 }
 
 func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
-	cfg := tls.Config{
+	cfg := &tls.Config{
 		MinVersion: uint16(args.minTLSVersion),
 		MaxVersion: uint16(args.maxTLSVersion),
 	}
@@ -1043,8 +1045,11 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	}
 	if len(args.tlsSessionKeys) > 0 {
 		cfg.SetSessionTicketKeys(args.tlsSessionKeys)
+		if args.tlsSameSessionKey {
+			cfg = tlsutil.PreserveSessionKeys(cfg, args.tlsSessionKeys)
+		}
 	}
-	return &cfg, nil
+	return cfg, nil
 }
 
 func readConfig(filename string) error {
