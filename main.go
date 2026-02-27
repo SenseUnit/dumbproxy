@@ -893,6 +893,9 @@ func run() int {
 			BaseContext: func(_ net.Listener) context.Context {
 				return stopContext
 			},
+			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
+				return tlsutil.NonDefaultKeyUsedToContext(ctx, conn)
+			},
 		}
 		if args.disableHTTP2 {
 			server.TLSNextProto = make(map[string]func(*http.Server, *tls.Conn, http.Handler))

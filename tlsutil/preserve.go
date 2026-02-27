@@ -1,14 +1,15 @@
 package tlsutil
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
 )
 
 type preservedKeyKey struct{}
-
 type nonDefaultKeyUsedKey struct{}
+type connKey struct{}
 
 func saveConnKey(conn ConnTagger, key [32]byte) {
 	conn.SetTag(preservedKeyKey{}, key)
@@ -46,6 +47,19 @@ func WasNonDefaultKeyUsed(conn net.Conn) bool {
 	}
 	val, _ := saved.(bool)
 	return val
+}
+
+func NonDefaultKeyUsedToContext(ctx context.Context, conn net.Conn) context.Context {
+	return context.WithValue(ctx, connKey{}, conn)
+}
+
+func NonDefaultKeyUsedFromContext(ctx context.Context) bool {
+	val := ctx.Value(connKey{})
+	conn, ok := val.(net.Conn)
+	if !ok {
+		return false
+	}
+	return WasNonDefaultKeyUsed(conn)
 }
 
 func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte) *tls.Config {
@@ -88,13 +102,14 @@ func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte) *tls.Config {
 			return nil, nil
 		}
 		cfg.WrapSession = func(cs tls.ConnectionState, ss *tls.SessionState) ([]byte, error) {
+			skCfg := cfg.Clone()
+			skCfg.SessionTicketKey = [32]byte{}
+			key := keys[0]
 			// is there previous key? if so, use it
-			if key, ok := getConnKey(conn); ok {
-				skCfg := cfg.Clone()
-				skCfg.SessionTicketKey = [32]byte{}
-				skCfg.SetSessionTicketKeys([][32]byte{key})
-				return skCfg.EncryptTicket(cs, ss)
+			if k, ok := getConnKey(conn); ok {
+				key = k
 			}
+			skCfg.SetSessionTicketKeys([][32]byte{key})
 			return cfg.EncryptTicket(cs, ss)
 		}
 		return cfg, nil
