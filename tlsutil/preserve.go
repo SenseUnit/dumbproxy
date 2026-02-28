@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"net"
+
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 type preservedKeyKey struct{}
@@ -62,11 +64,12 @@ func NonDefaultKeyUsedFromContext(ctx context.Context) bool {
 	return WasNonDefaultKeyUsed(conn)
 }
 
-func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte) *tls.Config {
+func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte, logger *clog.CondLogger) *tls.Config {
 	if len(keys) < 2 {
 		// there's just one key defined, nothing to do
 		return cfg
 	}
+	logger.Debug("TLS session key preservation is now active.")
 	forkConfig := func(chi *tls.ClientHelloInfo) (*tls.Config, error) {
 		return cfg.Clone(), nil
 	}
@@ -87,13 +90,16 @@ func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte) *tls.Config {
 			skCfg := cfg.Clone()
 			skCfg.SessionTicketKey = [32]byte{}
 			for ki, key := range keys {
+				logger.Debug("trying session key %x (#%d)", key, ki)
 				skCfg.SetSessionTicketKeys([][32]byte{key})
 				ss, err := skCfg.DecryptTicket(identity, cs)
 				if err != nil {
+					logger.Error("got tls session ticket decrypt error: %v", err)
 					return nil, err
 				}
 				if ss != nil {
 					// key match
+					logger.Debug("matched key %x for remote %s", key, chi.Conn.RemoteAddr())
 					saveConnKey(conn, key)
 					setNonDefaultKeyUsed(conn, ki > 0)
 					return ss, nil
@@ -108,9 +114,12 @@ func PreserveSessionKeys(cfg *tls.Config, keys [][32]byte) *tls.Config {
 			// is there previous key? if so, use it
 			if k, ok := getConnKey(conn); ok {
 				key = k
+				logger.Debug("sending new ticket with reused key %x to remote %s", key, chi.Conn.RemoteAddr())
+			} else {
+				logger.Debug("sending new ticket with DEFAULT key %x to remote %s", key, chi.Conn.RemoteAddr())
 			}
 			skCfg.SetSessionTicketKeys([][32]byte{key})
-			return cfg.EncryptTicket(cs, ss)
+			return skCfg.EncryptTicket(cs, ss)
 		}
 		return cfg, nil
 	}

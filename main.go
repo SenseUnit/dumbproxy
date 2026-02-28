@@ -614,6 +614,9 @@ func run() int {
 	ttDemuxLogger := clog.NewCondLogger(log.New(logWriter, "TTDEMUX :",
 		log.LstdFlags|log.Lshortfile),
 		args.verbosity)
+	tlsSessionLogger := clog.NewCondLogger(log.New(logWriter, "TLSSESS :",
+		log.LstdFlags|log.Lshortfile),
+		args.verbosity)
 
 	// setup auth provider
 	authProvider, err := auth.NewAuth(args.auth, authLogger)
@@ -782,7 +785,7 @@ func run() int {
 	}
 
 	if args.cert != "" {
-		cfg, err1 := makeServerTLSConfig(args)
+		cfg, err1 := makeServerTLSConfig(args, tlsSessionLogger)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
 			return 3
@@ -844,7 +847,7 @@ func run() int {
 					http.ListenAndServe(args.autocertHTTP, m.HTTPHandler(nil)))
 			}()
 		}
-		cfg, err := makeServerTLSConfig(args)
+		cfg, err := makeServerTLSConfig(args, tlsSessionLogger)
 		if err != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err)
 			return 3
@@ -1010,7 +1013,7 @@ func run() int {
 	return 2
 }
 
-func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
+func makeServerTLSConfig(args *CLIArgs, logger *clog.CondLogger) (*tls.Config, error) {
 	cfg := &tls.Config{
 		MinVersion: uint16(args.minTLSVersion),
 		MaxVersion: uint16(args.maxTLSVersion),
@@ -1049,7 +1052,7 @@ func makeServerTLSConfig(args *CLIArgs) (*tls.Config, error) {
 	if len(args.tlsSessionKeys) > 0 {
 		cfg.SetSessionTicketKeys(args.tlsSessionKeys)
 		if args.tlsSameSessionKey {
-			cfg = tlsutil.PreserveSessionKeys(cfg, args.tlsSessionKeys)
+			cfg = tlsutil.PreserveSessionKeys(cfg, args.tlsSessionKeys, logger)
 		}
 	}
 	return cfg, nil
