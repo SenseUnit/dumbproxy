@@ -2,18 +2,12 @@ package dialer
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"net"
 	"net/netip"
 	"strings"
 	"time"
 
 	"codeberg.org/yarmak/secache"
-	"github.com/hashicorp/go-multierror"
 	"golang.org/x/sync/singleflight"
-
-	"github.com/SenseUnit/dumbproxy/dialer/dto"
 )
 
 type resolverCacheKey struct {
@@ -27,21 +21,18 @@ type resolverCacheValue struct {
 	err     error
 }
 
-type NameResolveCachingDialer struct {
-	resolver  Resolver
-	preFilter bool
-	cache     secache.Cache[resolverCacheKey, *resolverCacheValue]
-	sf        singleflight.Group
-	posTTL    time.Duration
-	negTTL    time.Duration
-	timeout   time.Duration
-	next      Dialer
+type CachingResolver struct {
+	next    Resolver
+	cache   secache.Cache[resolverCacheKey, *resolverCacheValue]
+	sf      singleflight.Group
+	posTTL  time.Duration
+	negTTL  time.Duration
+	timeout time.Duration
 }
 
-func NewNameResolveCachingDialer(next Dialer, preFilter bool, resolver Resolver, posTTL, negTTL, timeout time.Duration) *NameResolveCachingDialer {
-	return &NameResolveCachingDialer{
-		resolver:  resolver,
-		preFilter: preFilter,
+func NewCachingResolver(next Resolver, posTTL, negTTL, timeout time.Duration) *CachingResolver {
+	return &CachingResolver{
+		next: next,
 		cache: *(secache.New[resolverCacheKey, *resolverCacheValue](
 			3,
 			func(key resolverCacheKey, item *resolverCacheValue) bool {
@@ -51,62 +42,40 @@ func NewNameResolveCachingDialer(next Dialer, preFilter bool, resolver Resolver,
 		posTTL:  posTTL,
 		negTTL:  negTTL,
 		timeout: timeout,
-		next:    next,
 	}
 }
 
-func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if nrcd.preFilter && WantsHostname(ctx, network, address, nrcd.next) {
-		return nrcd.next.DialContext(ctx, network, address)
-	}
-
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract host and port from %s: %w", address, err)
-	}
-
+func (r *CachingResolver) LookupNetIP(ctx context.Context, network, host string) ([]netip.Addr, error) {
 	if addr, err := netip.ParseAddr(host); err == nil {
 		// literal IP address, just do unmapping
-		return nrcd.next.DialContext(ctx, network, net.JoinHostPort(addr.Unmap().String(), port))
-	}
-
-	var resolveNetwork string
-	switch network {
-	case "udp4", "tcp4", "ip4":
-		resolveNetwork = "ip4"
-	case "udp6", "tcp6", "ip6":
-		resolveNetwork = "ip6"
-	case "udp", "tcp", "ip":
-		resolveNetwork = "ip"
-	default:
-		return nil, fmt.Errorf("resolving dial %q: unsupported network %q", address, network)
+		return r.next.LookupNetIP(ctx, network, addr.Unmap().String())
 	}
 
 	host = strings.ToLower(host)
 	key := resolverCacheKey{
-		network: resolveNetwork,
+		network: network,
 		host:    host,
 	}
 
-	res, ok := nrcd.cache.GetValidOrDelete(key)
+	res, ok := r.cache.GetValidOrDelete(key)
 	if !ok {
-		v, _, _ := nrcd.sf.Do(key.network+":"+key.host, func() (any, error) {
-			ctx, cl := context.WithTimeout(context.Background(), nrcd.timeout)
+		v, _, _ := r.sf.Do(key.network+":"+key.host, func() (any, error) {
+			ctx, cl := context.WithTimeout(context.Background(), r.timeout)
 			defer cl()
-			res, err := nrcd.resolver.LookupNetIP(ctx, key.network, key.host)
+			res, err := r.next.LookupNetIP(ctx, key.network, key.host)
 			for i := range res {
 				res[i] = res[i].Unmap()
 			}
-			setTTL := nrcd.negTTL
+			setTTL := r.negTTL
 			if err == nil {
-				setTTL = nrcd.posTTL
+				setTTL = r.posTTL
 			}
 			item := &resolverCacheValue{
 				expires: time.Now().Add(setTTL),
 				addrs:   res,
 				err:     err,
 			}
-			nrcd.cache.Set(key, item)
+			r.cache.Set(key, item)
 			return item, nil
 		})
 		res = v.(*resolverCacheValue)
@@ -116,35 +85,7 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 		return nil, res.err
 	}
 
-	if nrcd.preFilter {
-		ctx = dto.OrigDstToContext(ctx, address)
-	}
-
-	var dialErr error
-	var conn net.Conn
-
-	for _, ip := range res.addrs {
-		conn, err = nrcd.next.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		if err == nil {
-			return conn, nil
-		}
-		dialErr = multierror.Append(dialErr, err)
-		var sae dto.StopAddressIteration
-		if errors.As(err, &sae) {
-			break
-		}
-	}
-
-	return nil, fmt.Errorf("failed to dial %s: %w", address, dialErr)
+	return res.addrs, nil
 }
 
-func (nrcd *NameResolveCachingDialer) Dial(network, address string) (net.Conn, error) {
-	return nrcd.DialContext(context.Background(), network, address)
-}
-
-func (nrcd *NameResolveCachingDialer) WantsHostname(ctx context.Context, net, address string) bool {
-	return WantsHostname(ctx, net, address, nrcd.next)
-}
-
-var _ Dialer = new(NameResolveCachingDialer)
-var _ HostnameWanter = new(NameResolveCachingDialer)
+var _ Resolver = new(CachingResolver)
