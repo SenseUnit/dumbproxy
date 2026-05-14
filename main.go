@@ -475,7 +475,7 @@ func parse_args() *CLIArgs {
 		return nil
 	})
 	flag.Var(&args.dnsPreferAddress, "dns-prefer-address", "address resolution preference (none/ipv4/ipv6)")
-	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 0, "enable DNS cache with specified fixed TTL")
+	flag.DurationVar(&args.dnsCacheTTL, "dns-cache-ttl", 10, "enable DNS cache with specified fixed TTL")
 	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
@@ -660,8 +660,29 @@ func run() int {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
 
+	// setup name resolution
+	var nameResolver dialer.Resolver = net.DefaultResolver
+	if len(args.dnsServers) > 0 {
+		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
+		if err != nil {
+			mainLogger.Critical("Failed to create name resolver: %v", err)
+			return 3
+		}
+	}
+	if args.dnsCacheTTL > 0 {
+		nameResolver = dialer.NewCachingResolver(
+			nameResolver,
+			args.dnsCacheTTL,
+			args.dnsCacheNegTTL,
+			args.dnsCacheTimeout,
+		)
+	}
+	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
+
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
+	// this resolving dialer resolves dials unconditionally, for sake of cache or resolving privacy
+	dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 	if len(args.proxy) > 0 {
 		for _, proxy := range args.proxy {
 			if proxy.literal {
@@ -692,28 +713,10 @@ func run() int {
 		}
 	}
 
-	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
-
-	var nameResolver dialer.Resolver = net.DefaultResolver
-	if len(args.dnsServers) > 0 {
-		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
-		if err != nil {
-			mainLogger.Critical("Failed to create name resolver: %v", err)
-			return 3
-		}
-	}
-	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
-	if args.dnsCacheTTL > 0 {
-		dialerRoot = dialer.NewNameResolveCachingDialer(
-			dialerRoot,
-			nameResolver,
-			args.dnsCacheTTL,
-			args.dnsCacheNegTTL,
-			args.dnsCacheTimeout,
-		)
-	} else {
-		dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
-	}
+	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot)
+	// this resolving dialer resolves dials conditionally (unless upstream dialer tells not to)
+	// for sake of access filtering by destination address
+	dialerRoot = dialer.NewNameResolvingDialer(dialerRoot, nameResolver)
 
 	// unholy plug
 	if args.tt {
