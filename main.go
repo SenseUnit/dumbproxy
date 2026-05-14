@@ -660,6 +660,16 @@ func run() int {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
 
+	var nameResolver dialer.Resolver = net.DefaultResolver
+	if len(args.dnsServers) > 0 {
+		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
+		if err != nil {
+			mainLogger.Critical("Failed to create name resolver: %v", err)
+			return 3
+		}
+	}
+	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
+
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
 	if len(args.proxy) > 0 {
@@ -694,18 +704,10 @@ func run() int {
 
 	dialerRoot = dialer.NewFilterDialer(filterRoot.Access, dialerRoot) // must follow after resolving in chain
 
-	var nameResolver dialer.Resolver = net.DefaultResolver
-	if len(args.dnsServers) > 0 {
-		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
-		if err != nil {
-			mainLogger.Critical("Failed to create name resolver: %v", err)
-			return 3
-		}
-	}
-	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
 	if args.dnsCacheTTL > 0 {
 		dialerRoot = dialer.NewNameResolveCachingDialer(
 			dialerRoot,
+			true,
 			nameResolver,
 			args.dnsCacheTTL,
 			args.dnsCacheNegTTL,

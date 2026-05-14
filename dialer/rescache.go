@@ -28,20 +28,20 @@ type resolverCacheValue struct {
 }
 
 type NameResolveCachingDialer struct {
-	resolver Resolver
-	cache    secache.Cache[resolverCacheKey, *resolverCacheValue]
-	sf       singleflight.Group
-	posTTL   time.Duration
-	negTTL   time.Duration
-	timeout  time.Duration
-	next     Dialer
+	resolver  Resolver
+	preFilter bool
+	cache     secache.Cache[resolverCacheKey, *resolverCacheValue]
+	sf        singleflight.Group
+	posTTL    time.Duration
+	negTTL    time.Duration
+	timeout   time.Duration
+	next      Dialer
 }
 
-func NewNameResolveCachingDialer(next Dialer, resolver Resolver, posTTL, negTTL, timeout time.Duration) *NameResolveCachingDialer {
-	//	func(c *ttlcache.Cache[resolverCacheKey, resolverCacheValue], key resolverCacheKey) *ttlcache.Item[resolverCacheKey, resolverCacheValue] {
-	//	},
+func NewNameResolveCachingDialer(next Dialer, preFilter bool, resolver Resolver, posTTL, negTTL, timeout time.Duration) *NameResolveCachingDialer {
 	return &NameResolveCachingDialer{
-		resolver: resolver,
+		resolver:  resolver,
+		preFilter: preFilter,
 		cache: *(secache.New[resolverCacheKey, *resolverCacheValue](
 			3,
 			func(key resolverCacheKey, item *resolverCacheValue) bool {
@@ -56,7 +56,7 @@ func NewNameResolveCachingDialer(next Dialer, resolver Resolver, posTTL, negTTL,
 }
 
 func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if WantsHostname(ctx, network, address, nrcd.next) {
+	if nrcd.preFilter && WantsHostname(ctx, network, address, nrcd.next) {
 		return nrcd.next.DialContext(ctx, network, address)
 	}
 
@@ -116,7 +116,9 @@ func (nrcd *NameResolveCachingDialer) DialContext(ctx context.Context, network, 
 		return nil, res.err
 	}
 
-	ctx = dto.OrigDstToContext(ctx, address)
+	if nrcd.preFilter {
+		ctx = dto.OrigDstToContext(ctx, address)
+	}
 
 	var dialErr error
 	var conn net.Conn
