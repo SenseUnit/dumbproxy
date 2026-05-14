@@ -660,6 +660,7 @@ func run() int {
 		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
 	}
 
+	// setup name resolution
 	var nameResolver dialer.Resolver = net.DefaultResolver
 	if len(args.dnsServers) > 0 {
 		nameResolver, err = resolver.FastFromURLs(args.dnsServers...)
@@ -672,6 +673,16 @@ func run() int {
 
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
+	if args.dnsCacheTTL > 0 {
+		dialerRoot = dialer.NewNameResolveCachingDialer(
+			dialerRoot,
+			false,
+			nameResolver,
+			args.dnsCacheTTL,
+			args.dnsCacheNegTTL,
+			args.dnsCacheTimeout,
+		)
+	}
 	if len(args.proxy) > 0 {
 		for _, proxy := range args.proxy {
 			if proxy.literal {
