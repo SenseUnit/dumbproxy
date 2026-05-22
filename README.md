@@ -476,9 +476,13 @@ Supported proxy schemes are:
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
   * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
+  * `read-idle-timeout` - timeout after which a health check using a ping frame will be carried out if no frame is received on the connection. If zero, no health check is performed. Default: `5s`.
+  * `ping-timeout` - timeout after which the connection will be closed if a response to a ping is not received. Default: `5s`.
   * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
 * `h2c` - HTTP/2 proxy over plaintext connection with the CONNECT method support. Examples: `h2c://example.org:8080`.
   * `fetchrandom` - request server to send random data in the first request via every new HTTP/2 connection. Useful to trick TLS-in-TLS detection. Value format: length as a number or range `x-y`. Example: `fetchrandom=100000-500000`.
+  * `read-idle-timeout` - timeout after which a health check using a ping frame will be carried out if no frame is received on the connection. If zero, no health check is performed. Default: `5s`.
+  * `ping-timeout` - timeout after which the connection will be closed if a response to a ping is not received. Default: `5s`.
 * `socks5`, `socks5h` - SOCKS5 proxy with hostname resolving via remote proxy. Example: `socks5://127.0.0.1:9050`.
 * `socks5s`, `socks5hs` - SOCKS5 proxy over TLS with hostname resolving via remote proxy. Example: `socks5s://example.com:10443`. This method also supports additional parameters passed in query string:
   * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
