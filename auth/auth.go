@@ -38,12 +38,47 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 	case "none":
 		return NoAuth{}, nil
 	case "reject-http", "reject-https":
-		return NewRejectHTTPAuth(url, logger)
+		return newRejectAuthFromURL(url, logger)
 	case "reject-static":
-		return NewStaticRejectAuth(url, logger)
+		return newRejectAuthFromURL(url, logger)
 	case "tlscookie":
 		return NewTLSCookieAuth(url, logger)
 	default:
 		return nil, errors.New("Unknown auth scheme")
+	}
+}
+
+// NewRejectAuth constructs an auth provider which always responds and rejects.
+func NewRejectAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
+	url, err := url.Parse(paramstr)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRejectAuthFromURL(url, logger)
+}
+
+func newRejectAuthFromURL(url *url.URL, logger *clog.CondLogger) (Auth, error) {
+	switch strings.ToLower(url.Scheme) {
+	case "reject-http", "reject-https":
+		return NewRejectHTTPAuth(url, logger)
+	case "reject-static":
+		return NewStaticRejectAuth(url, logger)
+	default:
+		return nil, errors.New("Unknown reject scheme")
+	}
+}
+
+func NewResponse(paramstr string, logger *clog.CondLogger) (Auth, error) {
+	url, err := url.Parse(paramstr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch strings.ToLower(url.Scheme) {
+	case "static":
+		return NewStaticResponse(url, logger)
+	default:
+		return nil, errors.New("Unknown response scheme")
 	}
 }

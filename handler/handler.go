@@ -32,14 +32,16 @@ type HandlerDialer interface {
 type ForwardFunc = func(ctx context.Context, username string, incoming, outgoing io.ReadWriteCloser, network, address string) error
 
 type ProxyHandler struct {
-	auth          auth.Auth
-	logger        *clog.CondLogger
-	dialer        HandlerDialer
-	forward       ForwardFunc
-	httptransport http.RoundTripper
-	outbound      map[string]string
-	outboundMux   sync.RWMutex
-	userIPHints   bool
+	auth           auth.Auth
+	directResponse auth.Auth
+	accessReject   auth.Auth
+	logger         *clog.CondLogger
+	dialer         HandlerDialer
+	forward        ForwardFunc
+	httptransport  http.RoundTripper
+	outbound       map[string]string
+	outboundMux    sync.RWMutex
+	userIPHints    bool
 }
 
 func NewProxyHandler(config *Config) *ProxyHandler {
@@ -64,13 +66,15 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 		f = forward.PairConnections
 	}
 	return &ProxyHandler{
-		auth:          a,
-		logger:        l,
-		dialer:        d,
-		forward:       f,
-		httptransport: httptransport,
-		outbound:      make(map[string]string),
-		userIPHints:   config.UserIPHints,
+		auth:           a,
+		directResponse: config.DirectResponse,
+		accessReject:   config.AccessReject,
+		logger:         l,
+		dialer:         d,
+		forward:        f,
+		httptransport:  httptransport,
+		outbound:       make(map[string]string),
+		userIPHints:    config.UserIPHints,
 	}
 }
 
@@ -80,7 +84,7 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 		var accessErr derrors.ErrAccessDenied
 		if errors.As(err, &accessErr) {
 			s.logger.Warning("Access denied: %v", err)
-			http.Error(wr, "Access denied", http.StatusForbidden)
+			s.rejectAccess(wr, req)
 			return
 		}
 		s.logger.Error("Can't satisfy CONNECT request: %v", err)
@@ -179,7 +183,7 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 		var accessErr derrors.ErrAccessDenied
 		if errors.As(err, &accessErr) {
 			s.logger.Warning("Access denied: %v", err)
-			http.Error(wr, "Access denied", http.StatusForbidden)
+			s.rejectAccess(wr, req)
 			return
 		}
 		s.logger.Error("HTTP fetch error: %v", err)
@@ -229,6 +233,11 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if s.directResponse != nil && isDirectRequest(req) {
+		s.reject(s.directResponse, wr, req)
+		return
+	}
+
 	ctx := req.Context()
 	username, ok := s.auth.Validate(ctx, wr, req)
 	localAddr := getLocalAddr(req.Context())
@@ -264,6 +273,19 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 	default:
 		s.HandleRequest(wr, req, username)
 	}
+}
+
+func (s *ProxyHandler) rejectAccess(wr http.ResponseWriter, req *http.Request) {
+	if s.accessReject == nil {
+		http.Error(wr, "Access denied", http.StatusForbidden)
+		return
+	}
+
+	s.reject(s.accessReject, wr, req)
+}
+
+func (s *ProxyHandler) reject(reject auth.Auth, wr http.ResponseWriter, req *http.Request) {
+	_, _ = reject.Validate(req.Context(), wr, req)
 }
 
 func trimAddrPort(addrPort string) string {

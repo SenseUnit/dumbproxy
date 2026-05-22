@@ -12,6 +12,12 @@ type Config struct {
 	// Auth optionally specifies request validator used to verify users
 	// and return their username.
 	Auth auth.Auth
+	// DirectResponse optionally specifies a response for direct HTTP requests
+	// that do not use proxy request form.
+	DirectResponse auth.Auth
+	// AccessReject optionally specifies a response for proxy requests
+	// denied by an access filter.
+	AccessReject auth.Auth
 	// Logger specifies optional custom logger.
 	Logger *clog.CondLogger
 	// Forward optionally specifies custom connection pairing function
