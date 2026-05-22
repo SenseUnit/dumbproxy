@@ -89,15 +89,11 @@ func MaybeWrapWithContextDialer(d LegacyDialer) Dialer {
 	return wrappedDialer{d}
 }
 
-func garbageLenFuncFromURL(u *url.URL, paramname string) (func() int, error) {
-	params, err := url.ParseQuery(u.RawQuery)
-	if err != nil {
-		return nil, fmt.Errorf("garbage len param parse failed: %w", err)
-	}
-	if !params.Has(paramname) {
+func garbageLenFuncFromValues(params url.Values) (func() int, error) {
+	if !params.Has("fetchrandom") {
 		return nil, nil
 	}
-	left, right, found := strings.Cut(params.Get(paramname), "-")
+	left, right, found := strings.Cut(params.Get("fetchrandom"), "-")
 	if found {
 		lo, err := strconv.Atoi(left)
 		if err != nil {
