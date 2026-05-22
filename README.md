@@ -308,6 +308,8 @@ Authentication parameters are passed as URI via `-auth` parameter. Scheme of URI
   * `else` - optional URL specifying the next auth provider to chain to, if authentication failed.
   * `lookup` - optional URL specifying another auth provider queried for session validity (typically `basicfile` or some Redis-backed password auth). Queries to this lookup provider ask for validity of session providing hexadecimal session ID as username and empty string as password.
 
+`static` can also be used with `-direct-response` to respond to direct non-proxy HTTP requests. It accepts the same `code`, `body`, and `headers` parameters as `reject-static`. `reject-http`, `reject-https`, and `reject-static` can also be used with `-access-reject` to respond to requests denied by access filters.
+
 ## Scripting
 
 With the dumbproxy, it is possible to modify request processing behaviour using simple scripts written in the JavaScript programming language.
@@ -537,6 +539,8 @@ Configuration format is [RFC 4180](https://www.rfc-editor.org/rfc/rfc4180.html) 
 ```
 $ ~/go/bin/dumbproxy -h
 Usage of /home/user/go/bin/dumbproxy:
+  -access-reject string
+    	reject response parameters for requests denied by access filters
   -auth string
     	auth parameters (default "none://")
   -autocert
@@ -589,6 +593,8 @@ Usage of /home/user/go/bin/dumbproxy:
     	colon-separated list of enabled key exchange curves
   -deny-dst-addr value
     	comma-separated list of CIDR prefixes of forbidden IP addresses (default 127.0.0.0/8, 0.0.0.0/32, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, ::/128, fe80::/10)
+  -direct-response string
+    	response parameters for direct HTTP requests
   -disable-http2
     	disable HTTP2
   -dns-cache-neg-ttl duration

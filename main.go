@@ -285,6 +285,8 @@ type CLIArgs struct {
 	unixSockMode             modeArg
 	mode                     proxyModeArg
 	auth                     string
+	directResponse           string
+	accessReject             string
 	verbosity                int
 	cert, key, cafile        string
 	list_ciphers             bool
@@ -387,6 +389,8 @@ func parse_args() *CLIArgs {
 	flag.Var(&args.unixSockMode, "unix-sock-mode", "set file mode for bound unix socket")
 	flag.Var(&args.mode, "mode", "proxy operation mode (http/socks5/stdio/port-forward)")
 	flag.StringVar(&args.auth, "auth", "none://", "auth parameters")
+	flag.StringVar(&args.directResponse, "direct-response", "", "response parameters for direct HTTP requests")
+	flag.StringVar(&args.accessReject, "access-reject", "", "reject response parameters for requests denied by access filters")
 	flag.IntVar(&args.verbosity, "verbosity", 20, "logging verbosity "+
 		"(10 - debug, 20 - info, 30 - warning, 40 - error, 50 - critical)")
 	flag.StringVar(&args.cert, "cert", "", "enable TLS and use certificate")
@@ -640,6 +644,26 @@ func run() int {
 		return 3
 	}
 	defer authProvider.Close()
+
+	var directResponse auth.Auth
+	if args.directResponse != "" {
+		directResponse, err = auth.NewResponse(args.directResponse, authLogger)
+		if err != nil {
+			mainLogger.Critical("Failed to instantiate direct request response: %v", err)
+			return 3
+		}
+		defer directResponse.Close()
+	}
+
+	var accessReject auth.Auth
+	if args.accessReject != "" {
+		accessReject, err = auth.NewRejectAuth(args.accessReject, authLogger)
+		if err != nil {
+			mainLogger.Critical("Failed to instantiate access reject response: %v", err)
+			return 3
+		}
+		defer accessReject.Close()
+	}
 
 	// setup access filters
 	var filterRoot access.Filter = access.AlwaysAllow{}
@@ -899,11 +923,13 @@ func run() int {
 	case proxyModeHTTP:
 		server := http.Server{
 			Handler: handler.NewProxyHandler(&handler.Config{
-				Dialer:      dialerRoot,
-				Auth:        authProvider,
-				Logger:      proxyLogger,
-				UserIPHints: args.userIPHints,
-				Forward:     forwarder,
+				Dialer:         dialerRoot,
+				Auth:           authProvider,
+				DirectResponse: directResponse,
+				AccessReject:   accessReject,
+				Logger:         proxyLogger,
+				UserIPHints:    args.userIPHints,
+				Forward:        forwarder,
 			}),
 			ErrorLog:          log.New(logWriter, "HTTPSRV : ", log.LstdFlags|log.Lshortfile),
 			ReadTimeout:       0,

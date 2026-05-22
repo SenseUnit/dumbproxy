@@ -22,6 +22,10 @@ type StaticRejectAuth struct {
 }
 
 func NewStaticRejectAuth(u *url.URL, logger *clog.CondLogger) (*StaticRejectAuth, error) {
+	return NewStaticResponse(u, logger)
+}
+
+func NewStaticResponse(u *url.URL, logger *clog.CondLogger) (*StaticRejectAuth, error) {
 	values, err := url.ParseQuery(u.RawQuery)
 	if err != nil {
 		return nil, err
