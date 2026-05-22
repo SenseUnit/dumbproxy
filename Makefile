@@ -1,6 +1,6 @@
 PROGNAME = dumbproxy
 OUTSUFFIX = bin/$(PROGNAME)
-BUILDOPTS = -a -tags netgo -trimpath -asmflags -trimpath
+BUILDOPTS = -trimpath -asmflags -trimpath
 LDFLAGS = -ldflags '-s -w -extldflags "-static"'
 LDFLAGS_NATIVE = -ldflags '-s -w'
 
