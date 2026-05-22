@@ -73,9 +73,27 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 	if err != nil {
 		return nil, err
 	}
+	readIdleTimeout := 5 * time.Second
+	pingTimeout := 5 * time.Second
+	if params.Has("read-idle-timeout") {
+		d, err := time.ParseDuration(params.Get("read-idle-timeout"))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse duration in \"read-idle-timeout\" option: %w", err)
+		}
+		readIdleTimeout = d
+	}
+	if params.Has("ping-timeout") {
+		d, err := time.ParseDuration(params.Get("ping-timeout"))
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse duration in \"ping-timeout\" option: %w", err)
+		}
+		pingTimeout = d
+	}
 	t := &http2.Transport{
 		AllowHTTP:       h2c,
 		TLSClientConfig: tlsConfig,
+		ReadIdleTimeout: readIdleTimeout,
+		PingTimeout:     pingTimeout,
 	}
 	t.ConnPool = &clientConnPool{
 		t: t,
