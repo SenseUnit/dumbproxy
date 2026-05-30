@@ -827,6 +827,10 @@ func run() int {
 	}
 
 	if args.cert != "" {
+		if args.key == "" {
+			mainLogger.Critical("flag --key is required when --cert is set")
+			return 2
+		}
 		cfg, err1 := makeServerTLSConfig(args, tlsSessionLogger)
 		if err1 != nil {
 			mainLogger.Critical("TLS config construction failed: %v", err1)
