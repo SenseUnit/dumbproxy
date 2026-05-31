@@ -1,3 +1,4 @@
+[![CI](https://github.com/Arvuno/dumbproxy/actions/workflows/ci.yml/badge.svg)](https://github.com/Arvuno/dumbproxy/actions)
 dumbproxy
 =========
 

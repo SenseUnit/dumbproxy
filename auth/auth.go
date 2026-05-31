@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,7 +45,7 @@ func NewAuth(paramstr string, logger *clog.CondLogger) (Auth, error) {
 	case "tlscookie":
 		return NewTLSCookieAuth(url, logger)
 	default:
-		return nil, errors.New("Unknown auth scheme")
+		return nil, fmt.Errorf("unknown auth scheme %q", url.Scheme)
 	}
 }
 
