@@ -10,6 +10,9 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 	if err := AddStopAddressIteration(vm); err != nil {
 		return err
 	}
+	if err := AddMMDBReader(vm); err != nil {
+		return err
+	}
 	if err := ExportEnv(vm); err != nil {
 		return err
 	}
