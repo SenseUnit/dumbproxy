@@ -10,6 +10,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/libp2p/go-reuseport v0.4.0
 	github.com/ncruces/go-dns v1.3.3
+	github.com/oschwald/maxminddb-golang/v2 v2.3.0
 	github.com/pires/go-proxyproto v0.12.0
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/refraction-networking/utls v1.8.2
