@@ -47,6 +47,7 @@ type JSDstInfo struct {
 	OriginalHost string  `json:"originalHost"`
 	ResolvedHost *string `json:"resolvedHost"`
 	Port         uint16  `json:"port"`
+	Preview      bool    `json:"preview"`
 }
 
 func JSDstInfoFromContext(ctx context.Context, network, address string) (*JSDstInfo, error) {

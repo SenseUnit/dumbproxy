@@ -337,6 +337,7 @@ It is possible to filter (allow or deny) requests with simple `access` JS functi
    * **originalHost** *(String)* - original hostname or IP address parsed from request.
    * **resolvedHost** *(String)* - resolved hostname from request or `null` if resolving was not performed (e.g. if upstream dialer is a proxy).
    * **port** *(Number)* - port number.
+   * **preview** *(Boolean)* - true, if this function invocation is made with unresolved destination address in order to determine upstream kind and if it needs resolving at all.
 3. **Username** *(String)*. Name of the authenticated user or an empty string if there is no authentication.
 
 `access` function must return boolean value, `true` allows request and `false` forbids it. Any exception will be reported to log and the corresponding request will be denied.

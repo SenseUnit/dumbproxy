@@ -81,13 +81,14 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 	}, nil
 }
 
-func (j *JSRouter) getNextDialer(ctx context.Context, network, address string) (Dialer, error) {
+func (j *JSRouter) getNextDialer(ctx context.Context, network, address string, preview bool) (Dialer, error) {
 	req, username := dto.FilterParamsFromContext(ctx)
 	ri := jsext.JSRequestInfoFromRequest(req)
 	di, err := jsext.JSDstInfoFromContext(ctx, network, address)
 	if err != nil {
 		return nil, fmt.Errorf("unable to construct dst info: %w", err)
 	}
+	di.Preview = preview
 
 	var res string
 	func() {
@@ -113,7 +114,7 @@ func (j *JSRouter) getNextDialer(ctx context.Context, network, address string) (
 }
 
 func (j *JSRouter) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	d, err := j.getNextDialer(ctx, network, address)
+	d, err := j.getNextDialer(ctx, network, address, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to route request: %w", err)
 	}
@@ -121,7 +122,7 @@ func (j *JSRouter) DialContext(ctx context.Context, network, address string) (ne
 }
 
 func (j *JSRouter) WantsHostname(ctx context.Context, network, address string) bool {
-	d, err := j.getNextDialer(ctx, network, address)
+	d, err := j.getNextDialer(ctx, network, address, true)
 	if err != nil {
 		return false
 	}
