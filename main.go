@@ -540,10 +540,11 @@ func parse_args() *CLIArgs {
 
 func run() int {
 	args := parse_args()
+	ver := version()
 
 	// handle special invocation modes
 	if args.showVersion {
-		fmt.Println(version())
+		fmt.Println(ver)
 		return 0
 	}
 
@@ -760,7 +761,7 @@ func run() int {
 
 	stopContext, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
-	mainLogger.Info("Starting proxy server...")
+	mainLogger.Info("dumbproxy %s (c) 2020-2026 Vladislav Yarmak and Contributors...", ver)
 
 	listenerFactory := net.Listen
 	switch {
@@ -967,7 +968,7 @@ func run() int {
 		if err := server.Serve(listener); err == http.ErrServerClosed {
 			// need to wait shutdown to exit
 			<-shutdownComplete
-			mainLogger.Info("Reached normal server termination.")
+			mainLogger.Info("dumbproxy %s reached normal server termination.", ver)
 		} else {
 			mainLogger.Critical("Server terminated with a reason: %v", err)
 		}
@@ -1007,14 +1008,14 @@ func run() int {
 		server := socks5.NewServer(opts...)
 		if err := server.Serve(listener); err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				mainLogger.Info("Reached normal server termination.")
+				mainLogger.Info("dumbproxy %s reached normal server termination.", ver)
 				return 0
 			} else {
 				mainLogger.Critical("Server failure: %v", err)
 				return 1
 			}
 		}
-		mainLogger.Info("Reached normal server termination.")
+		mainLogger.Info("dumbproxy %s reached normal server termination.", ver)
 		return 0
 	case proxyModeStdIO:
 		handler := handler.StdIOHandler(dialerRoot, proxyLogger, forwarder)
@@ -1042,14 +1043,14 @@ func run() int {
 		}()
 		if err := handler.StreamServe(listener, connHandler); err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				mainLogger.Info("Reached normal server termination.")
+				mainLogger.Info("dumbproxy %s reached normal server termination.", ver)
 				return 0
 			} else {
 				mainLogger.Critical("Server failure: %v", err)
 				return 1
 			}
 		}
-		mainLogger.Info("Reached normal server termination.")
+		mainLogger.Info("dumbproxy %s reached normal server termination.", ver)
 		return 0
 	}
 
