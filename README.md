@@ -442,6 +442,8 @@ Following builtin functions are addionally available within JS scripts:
 
 * `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
 * `readFile(path: string): string` - read file from *path* and return its content as a string.
+* `mmdbOpen(path: string): mmdbReaderObject` - opens MaxMind database and returns a reader object which has only one method:
+  * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
 * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:
