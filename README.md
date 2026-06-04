@@ -676,6 +676,36 @@ Usage of /home/user/go/bin/dumbproxy:
     	show program version and exit
 ```
 
+## Minimal config file
+
+The full configuration format is described in the [Configuration
+files](#configuration-files) section above. This is the smallest
+config file that is useful in practice — a plaintext HTTP proxy
+listening on `127.0.0.1:8080` with no authentication, roughly the
+equivalent of running `dumbproxy` with no arguments.
+
+Save the following as `dp.cfg` and run `dumbproxy -config dp.cfg`:
+
+```
+# Minimal dumbproxy configuration
+# Format: space-separated key/value pairs, one option per line.
+# Lines with a single field are treated as boolean flags.
+
+bind-address 127.0.0.1:8080
+auth none://
+verbosity 20
+```
+
+To add basic authentication, replace the `auth` line with, for
+example:
+
+```
+auth static://?username=admin&password=123456
+```
+
+See [Authentication](#authentication) for the full list of supported
+auth provider schemes.
+
 ## See Also
 
 * [Project Wiki](https://github.com/SenseUnit/dumbproxy/wiki)
