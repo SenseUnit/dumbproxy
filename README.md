@@ -676,6 +676,26 @@ Usage of /home/user/go/bin/dumbproxy:
     	show program version and exit
 ```
 
+## Listening on multiple addresses
+
+The `-bind-address` flag accepts a single listen address per dumbproxy
+process. There is currently no built-in way to make a single instance
+bind to several addresses at once — each process opens exactly one
+listener (plus any auxiliary listeners like the autocert HTTP-01
+challenge handler and the optional pprof listener).
+
+If you need dumbproxy reachable on more than one address (for example
+both `127.0.0.1:8080` and `[::1]:8080`, or two different external
+interfaces), the recommended workaround is to run multiple dumbproxy
+processes — one per bind address. Each instance can be configured via
+its own `-config` file or command-line flags, and you can manage them
+with your usual supervisor (systemd unit, Docker container, etc.).
+
+Note that this section only documents the workaround. Native support
+for binding a single dumbproxy instance on multiple addresses is
+tracked in upstream issue #187 and is **not** implemented in this
+repository at the moment.
+
 ## See Also
 
 * [Project Wiki](https://github.com/SenseUnit/dumbproxy/wiki)
