@@ -1,20 +1,27 @@
 package jsext
 
-import "github.com/dop251/goja"
+import (
+	"fmt"
+
+	"github.com/dop251/goja"
+)
+
+type vmInitPart = func(vm *goja.Runtime) error
 
 func ConfigureRuntime(vm *goja.Runtime) error {
-	vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-	if err := AddFileReader(vm); err != nil {
-		return err
-	}
-	if err := AddStopAddressIteration(vm); err != nil {
-		return err
-	}
-	if err := AddMMDBReader(vm); err != nil {
-		return err
-	}
-	if err := ExportEnv(vm); err != nil {
-		return err
+	for idx, f := range []vmInitPart{
+		func(vm *goja.Runtime) error {
+			vm.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
+			return nil
+		},
+		AddFileReader,
+		AddStopAddressIteration,
+		AddMMDBReader,
+		ExportEnv,
+	} {
+		if err := f(vm); err != nil {
+			return fmt.Errorf("JS runtime init part #%d failed: %w", idx+1, err)
+		}
 	}
 	return nil
 }

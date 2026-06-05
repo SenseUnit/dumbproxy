@@ -82,7 +82,7 @@ func mmdbOpen(filename string, vm *goja.Runtime) (*mmdbReaderObject, error) {
 }
 
 func AddMMDBReader(vm *goja.Runtime) error {
-	return vm.Set("mmdbOpen", func(call goja.FunctionCall) goja.Value {
+	return vm.GlobalObject().Set("mmdbOpen", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) != 1 {
 			panic(vm.NewTypeError("mmdbOpen expects exactly 1 argument, a filename"))
 		}

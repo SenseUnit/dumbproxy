@@ -7,7 +7,7 @@ import (
 )
 
 func AddFileReader(vm *goja.Runtime) error {
-	return vm.Set("readFile", func(call goja.FunctionCall) goja.Value {
+	return vm.GlobalObject().Set("readFile", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) != 1 {
 			panic(vm.NewTypeError("readFile expects exactly 1 argument"))
 		}

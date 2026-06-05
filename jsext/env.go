@@ -70,5 +70,5 @@ func GetEnvSharedDynamicObject() *goja.Object {
 }
 
 func ExportEnv(vm *goja.Runtime) error {
-	return vm.Set("env", GetEnvSharedDynamicObject())
+	return vm.GlobalObject().Set("env", GetEnvSharedDynamicObject())
 }
