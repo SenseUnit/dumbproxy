@@ -457,7 +457,8 @@ Following objects are additionally available in global scope of JS scripts:
 Supported proxy schemes are:
 
 * `http` - regular HTTP proxy with the CONNECT method support. Examples: `http://example.org:3128`.
-* `https` - HTTP proxy over TLS connection. Examples: `https://user:password@example.org`, `https://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
+* `https` - HTTP proxy over TLS connection. Examples: `https://user:password@example.org`, `https://example.org?cert=cert.pem&key=key.pem`. This dialer is an opportunistic wrapper for `http1s` and `h2` proxy schemes, switching protocol automatically by ALPN during TLS handshake. It supports same options as underlying `http1s` and `h2` transports.
+* `http1s` - HTTP/1 proxy over TLS connection, forcing HTTP version. Options can be passed via query string:
   * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
   * `sni` - override value of ServerName Indication extension.
   * `peername` - expect specified name in peer certificate. Empty string relaxes any name constraints.
@@ -468,8 +469,6 @@ Supported proxy schemes are:
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
   * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
-* `http+optimistic` - (EXPERIMENTAL) HTTP proxy dialer which reads the connection success response asynchronously.
-* `https+optimistic` - (EXPERIMENTAL) HTTP proxy over TLS dialer which reads the connection success response asynchronously. Options are same as for `https` dialer.
 * `h2` - HTTP/2 proxy over TLS connection. Examples: `h2://user:password@example.org`, `h2://example.org?cert=cert.pem&key=key.pem`. This method also supports additional parameters passed in query string:
   * `cafile` - file with CA certificates in PEM format used to verify TLS peer.
   * `sni` - override value of ServerName Indication extension.
@@ -500,6 +499,8 @@ Supported proxy schemes are:
   * `min-tls-version` - minimum TLS version.
   * `max-tls-version` - maximum TLS version.
   * `utls-fp` - TLS fingerprint parroting with uTLS library. See the [list](https://pkg.go.dev/github.com/refraction-networking/utls#pkg-variables) of allowed client IDs. Example: `utls-fp=HelloChrome_Auto`.
+* `http+optimistic` - (EXPERIMENTAL) HTTP/1 proxy dialer which reads the connection success response asynchronously.
+* `https+optimistic` - (EXPERIMENTAL) HTTP/1 proxy over TLS dialer which reads the connection success response asynchronously. Options are same as for `http1s` dialer.
 * `set-src-hints` - not an actual proxy, but a signal to use different source IP address hints for this connection. It's useful to route traffic across multiple network interfaces, including VPN connections. URL has to have one query parameter `hints` with a comma-separated list of IP addresses. See `-ip-hints` command line option for more details. Example: `set-src-hints://?hints=10.2.0.2`
 * `cached` - pseudo-dialer which caches construction of another dialer specified by URL passed in `url` parameter of query string. Useful for dialers which are constructed dynamically from JS router script and which load certificate files. Example: `cached://?url=https%3A%2F%2Fexample.org%3Fcert%3Dcert.pem%26key%3Dkey.pem&ttl=5m`. Query string parameters are:
    * `url` - actual proxy URL. Note that just like any query string parameter this one has to be URL-encoded to be passed as query string value.
