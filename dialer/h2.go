@@ -19,6 +19,24 @@ import (
 	xproxy "golang.org/x/net/proxy"
 )
 
+type h1RedeemError struct {
+	conn *tls.Conn
+}
+
+func (re h1RedeemError) Error() string {
+	return "HTTP/2 was not negotiated via ALPN"
+}
+
+func (re h1RedeemError) Close() error {
+	if re.conn != nil {
+		return re.conn.Close()
+	}
+	return nil
+}
+
+var _ error = h1RedeemError{}
+var _ io.Closer = h1RedeemError{}
+
 type H2ProxyDialer struct {
 	address   string
 	tlsConfig *tls.Config
@@ -55,6 +73,9 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		tlsConfig, err = tlsutil.TLSConfigFromURL(u)
 		if !slices.Contains(tlsConfig.NextProtos, "h2") {
 			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
+		}
+		if !slices.Contains(tlsConfig.NextProtos, "http/1.1") {
+			tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
 		}
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
@@ -147,6 +168,18 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 				return nil, err
 			}
 			conn = tlsFactory(conn, tlsConfig)
+			if tlsConn, ok := conn.(*tls.Conn); ok {
+				// it's a crypto/tls connection, we ought to see how ALPN went
+				if err := tlsConn.HandshakeContext(ctx); err != nil {
+					tlsConn.Close()
+					return nil, err
+				}
+				if tlsConn.ConnectionState().NegotiatedProtocol != "h2" {
+					// HTTP/2 was NOT negotiated! abort, but save the connection
+					// for potential redemption via HTTP/1 dialer
+					return nil, h1RedeemError{tlsConn}
+				}
+			}
 			return conn, nil
 		}
 	}

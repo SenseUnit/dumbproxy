@@ -83,17 +83,25 @@ func (d *H1ProxyDialer) Dial(network, address string) (net.Conn, error) {
 }
 
 func (d *H1ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	switch network {
-	case "tcp", "tcp4", "tcp6":
-	default:
-		return nil, errors.New("only \"tcp\" network is supported")
-	}
-	conn, err := d.next.DialContext(ctx, "tcp", d.address)
-	if err != nil {
-		return nil, fmt.Errorf("proxy dialer is unable to make connection: %w", err)
-	}
-	if d.tlsConfig != nil {
-		conn = d.tlsFactory(conn, d.tlsConfig)
+	var (
+		conn net.Conn
+		err  error
+	)
+	if rc := redeemedConnFromContext(ctx); rc != nil {
+		conn = rc
+	} else {
+		switch network {
+		case "tcp", "tcp4", "tcp6":
+		default:
+			return nil, errors.New("only \"tcp\" network is supported")
+		}
+		conn, err = d.next.DialContext(ctx, "tcp", d.address)
+		if err != nil {
+			return nil, fmt.Errorf("proxy dialer is unable to make connection: %w", err)
+		}
+		if d.tlsConfig != nil {
+			conn = d.tlsFactory(conn, d.tlsConfig)
+		}
 	}
 
 	stopGuardEvent := make(chan struct{})
@@ -177,4 +185,17 @@ func basicAuthHeader(userinfo *url.Userinfo) string {
 	password, _ := userinfo.Password()
 	return "Basic " + base64.StdEncoding.EncodeToString(
 		[]byte(username+":"+password))
+}
+
+type redeemedConnKey struct{}
+
+func redeemedConnToContext(ctx context.Context, conn net.Conn) context.Context {
+	return context.WithValue(ctx, redeemedConnKey{}, conn)
+}
+
+func redeemedConnFromContext(ctx context.Context) net.Conn {
+	if conn, ok := ctx.Value(redeemedConnKey{}).(net.Conn); ok {
+		return conn
+	}
+	return nil
 }
