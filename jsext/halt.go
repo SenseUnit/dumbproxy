@@ -7,7 +7,7 @@ import (
 )
 
 func AddStopAddressIteration(vm *goja.Runtime) error {
-	return vm.Set("newStopAddressIteration", func(call goja.FunctionCall) goja.Value {
+	return vm.GlobalObject().Set("newStopAddressIteration", func(call goja.FunctionCall) goja.Value {
 		return vm.NewGoError(dto.StopAddressIteration{})
 	})
 }
