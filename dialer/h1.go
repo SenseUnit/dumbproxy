@@ -20,7 +20,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/tlsutil"
 )
 
-type HTTPProxyDialer struct {
+type H1ProxyDialer struct {
 	address    string
 	tlsConfig  *tls.Config
 	tlsFactory func(net.Conn, *tls.Config) net.Conn
@@ -28,8 +28,8 @@ type HTTPProxyDialer struct {
 	next       Dialer
 }
 
-func NewHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Userinfo, next LegacyDialer) *HTTPProxyDialer {
-	return &HTTPProxyDialer{
+func NewH1ProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Userinfo, next LegacyDialer) *H1ProxyDialer {
+	return &H1ProxyDialer{
 		address:   address,
 		tlsConfig: tlsConfig,
 		next:      MaybeWrapWithContextDialer(next),
@@ -37,7 +37,7 @@ func NewHTTPProxyDialer(address string, tlsConfig *tls.Config, userinfo *url.Use
 	}
 }
 
-func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
+func H1ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error) {
 	host := u.Hostname()
 	port := u.Port()
 
@@ -69,7 +69,7 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 
 	address := net.JoinHostPort(host, port)
 
-	return &HTTPProxyDialer{
+	return &H1ProxyDialer{
 		address:    address,
 		tlsConfig:  tlsConfig,
 		tlsFactory: tlsFactory,
@@ -78,11 +78,11 @@ func HTTPProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, erro
 	}, nil
 }
 
-func (d *HTTPProxyDialer) Dial(network, address string) (net.Conn, error) {
+func (d *H1ProxyDialer) Dial(network, address string) (net.Conn, error) {
 	return d.DialContext(context.Background(), network, address)
 }
 
-func (d *HTTPProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+func (d *H1ProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	switch network {
 	case "tcp", "tcp4", "tcp6":
 	default:
