@@ -48,7 +48,7 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		}
 		h2c = true
 		scheme = "http"
-	case "h2":
+	case "h2", "https":
 		if port == "" {
 			port = "443"
 		}

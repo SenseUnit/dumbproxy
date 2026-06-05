@@ -51,7 +51,7 @@ func H1ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 		if port == "" {
 			port = "80"
 		}
-	case "https":
+	case "https", "http1s":
 		if port == "" {
 			port = "443"
 		}
