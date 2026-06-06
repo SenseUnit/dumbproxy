@@ -14,8 +14,9 @@ import (
 )
 
 func init() {
-	xproxy.RegisterDialerType("http", HTTPProxyDialerFromURL)
-	xproxy.RegisterDialerType("https", HTTPProxyDialerFromURL)
+	xproxy.RegisterDialerType("http", H1ProxyDialerFromURL)
+	xproxy.RegisterDialerType("http1s", H1ProxyDialerFromURL)
+	xproxy.RegisterDialerType("https", UnifiedHTTPSProxyDialerFromURL)
 	xproxy.RegisterDialerType("http+optimistic", OptimisticHTTPProxyDialerFromURL)
 	xproxy.RegisterDialerType("https+optimistic", OptimisticHTTPProxyDialerFromURL)
 	xproxy.RegisterDialerType("h2", H2ProxyDialerFromURL)

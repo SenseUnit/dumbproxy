@@ -1,6 +1,6 @@
 module github.com/SenseUnit/dumbproxy
 
-go 1.25.0
+go 1.26.0
 
 require (
 	codeberg.org/yarmak/secache v0.2.4
