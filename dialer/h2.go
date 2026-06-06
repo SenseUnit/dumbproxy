@@ -196,6 +196,7 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 						// for potential redemption via HTTP/1 dialer
 						return nil, h1RedeemError{tlsConn}
 					} else {
+						tlsConn.Close()
 						return nil, errors.New(alpnNegErrorText)
 					}
 				}
