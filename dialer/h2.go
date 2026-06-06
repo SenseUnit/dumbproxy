@@ -181,7 +181,8 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 			h1Fallback := h1FallbackFromContext(ctx)
 			if h1Fallback && !slices.Contains(ctc.NextProtos, "http/1.1") {
 				ctc = ctc.Clone()
-				ctc.NextProtos = append(ctc.NextProtos, "http/1.1")
+				// don't touch array backing NextProtos slice of original cfg
+				ctc.NextProtos = append(ctc.NextProtos[0:len(ctc.NextProtos):len(ctc.NextProtos)], "http/1.1")
 			}
 			conn = tlsFactory(conn, ctc)
 			if tlsConn, ok := conn.(*tls.Conn); ok {
