@@ -34,7 +34,7 @@ func (d *UnifiedHTTPSProxyDialer) Dial(network, address string) (net.Conn, error
 }
 
 func (d *UnifiedHTTPSProxyDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	conn, err := d.h2dialer.DialContext(ctx, network, address)
+	conn, err := d.h2dialer.DialContext(h1FallbackToContext(ctx, true), network, address)
 	if err != nil {
 		if rerr, ok := errors.AsType[h1RedeemError](err); ok {
 			// we've got a connection, but need it's HTTP/1

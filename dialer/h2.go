@@ -23,8 +23,10 @@ type h1RedeemError struct {
 	conn *tls.Conn
 }
 
+const alpnNegErrorText = "HTTP/2 was not negotiated via ALPN"
+
 func (re h1RedeemError) Error() string {
-	return "HTTP/2 was not negotiated via ALPN"
+	return alpnNegErrorText
 }
 
 func (re h1RedeemError) Close() error {
@@ -36,6 +38,17 @@ func (re h1RedeemError) Close() error {
 
 var _ error = h1RedeemError{}
 var _ io.Closer = h1RedeemError{}
+
+type h1FallbackKey struct{}
+
+func h1FallbackToContext(ctx context.Context, value bool) context.Context {
+	return context.WithValue(ctx, h1FallbackKey{}, value)
+}
+
+func h1FallbackFromContext(ctx context.Context) bool {
+	h1Fallback, _ := ctx.Value(h1FallbackKey{}).(bool)
+	return h1Fallback
+}
 
 type H2ProxyDialer struct {
 	address   string
@@ -71,14 +84,11 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 			port = "443"
 		}
 		tlsConfig, err = tlsutil.TLSConfigFromURL(u)
-		if !slices.Contains(tlsConfig.NextProtos, "h2") {
-			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
-		}
-		if !slices.Contains(tlsConfig.NextProtos, "http/1.1") {
-			tlsConfig.NextProtos = append(tlsConfig.NextProtos, "http/1.1")
-		}
 		if err != nil {
 			return nil, fmt.Errorf("TLS configuration failed: %w", err)
+		}
+		if !slices.Contains(tlsConfig.NextProtos, "h2") {
+			tlsConfig.NextProtos = append([]string{"h2"}, tlsConfig.NextProtos...)
 		}
 		tlsFactory, err = tlsutil.TLSFactoryFromURL(u)
 		if err != nil {
@@ -167,7 +177,13 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 			if err != nil {
 				return nil, err
 			}
-			conn = tlsFactory(conn, tlsConfig)
+			ctc := tlsConfig
+			h1Fallback := h1FallbackFromContext(ctx)
+			if h1Fallback && !slices.Contains(ctc.NextProtos, "http/1.1") {
+				ctc = ctc.Clone()
+				ctc.NextProtos = append(ctc.NextProtos, "http/1.1")
+			}
+			conn = tlsFactory(conn, ctc)
 			if tlsConn, ok := conn.(*tls.Conn); ok {
 				// it's a crypto/tls connection, we ought to see how ALPN went
 				if err := tlsConn.HandshakeContext(ctx); err != nil {
@@ -175,9 +191,13 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 					return nil, err
 				}
 				if tlsConn.ConnectionState().NegotiatedProtocol != "h2" {
-					// HTTP/2 was NOT negotiated! abort, but save the connection
-					// for potential redemption via HTTP/1 dialer
-					return nil, h1RedeemError{tlsConn}
+					if h1Fallback {
+						// HTTP/2 was NOT negotiated! abort, but save the connection
+						// for potential redemption via HTTP/1 dialer
+						return nil, h1RedeemError{tlsConn}
+					} else {
+						return nil, errors.New(alpnNegErrorText)
+					}
 				}
 			}
 			return conn, nil
