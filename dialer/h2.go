@@ -14,13 +14,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SenseUnit/dumbproxy/tlsutil"
+	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
 	xproxy "golang.org/x/net/proxy"
+
+	"github.com/SenseUnit/dumbproxy/tlsutil"
 )
 
 type h1RedeemError struct {
-	conn *tls.Conn
+	conn net.Conn
 }
 
 const alpnNegErrorText = "HTTP/2 was not negotiated via ALPN"
@@ -48,6 +50,18 @@ func h1FallbackToContext(ctx context.Context, value bool) context.Context {
 func h1FallbackFromContext(ctx context.Context) bool {
 	h1Fallback, _ := ctx.Value(h1FallbackKey{}).(bool)
 	return h1Fallback
+}
+
+type handshaker interface {
+	HandshakeContext(context.Context) error
+}
+
+type connStater interface {
+	ConnectionState() tls.ConnectionState
+}
+
+type utlsConnStater interface {
+	ConnectionState() utls.ConnectionState
 }
 
 type H2ProxyDialer struct {
@@ -185,19 +199,29 @@ func H2ProxyDialerFromURL(u *url.URL, next xproxy.Dialer) (xproxy.Dialer, error)
 				ctc.NextProtos = append(ctc.NextProtos[0:len(ctc.NextProtos):len(ctc.NextProtos)], "http/1.1")
 			}
 			conn = tlsFactory(conn, ctc)
-			if tlsConn, ok := conn.(*tls.Conn); ok {
-				// it's a crypto/tls connection, we ought to see how ALPN went
-				if err := tlsConn.HandshakeContext(ctx); err != nil {
-					tlsConn.Close()
+			if hs, ok := conn.(handshaker); ok {
+				if err := hs.HandshakeContext(ctx); err != nil {
+					conn.Close()
 					return nil, err
 				}
-				if tlsConn.ConnectionState().NegotiatedProtocol != "h2" {
+				var negProto string
+				switch c := conn.(type) {
+				case connStater:
+					negProto = c.ConnectionState().NegotiatedProtocol
+				case utlsConnStater:
+					negProto = c.ConnectionState().NegotiatedProtocol
+				default:
+					// can't access TLS extensions of conn, ALPN is not available
+					return conn, nil
+				}
+				// it's a TLS connection with ALPN, we ought to see how negotiation went
+				if negProto != "h2" {
 					if h1Fallback {
 						// HTTP/2 was NOT negotiated! abort, but save the connection
 						// for potential redemption via HTTP/1 dialer
-						return nil, h1RedeemError{tlsConn}
+						return nil, h1RedeemError{conn}
 					} else {
-						tlsConn.Close()
+						conn.Close()
 						return nil, errors.New(alpnNegErrorText)
 					}
 				}
