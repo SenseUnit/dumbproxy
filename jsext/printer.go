@@ -10,7 +10,7 @@ import (
 
 func AddPrinter(vm *goja.Runtime, logger *clog.CondLogger) error {
 	return vm.GlobalObject().Set("print", func(call goja.FunctionCall) goja.Value {
-		printArgs := make([]interface{}, len(call.Arguments))
+		printArgs := make([]any, len(call.Arguments))
 		for i, arg := range call.Arguments {
 			printArgs[i] = arg
 		}
