@@ -156,7 +156,7 @@ func ipToLAddr(network string, ip net.IP) (net.Addr, string, error) {
 
 func parseIPList(list string) ([]net.IP, error) {
 	res := make([]net.IP, 0)
-	for _, elem := range strings.Split(list, ",") {
+	for elem := range strings.SplitSeq(list, ",") {
 		elem = strings.TrimSpace(elem)
 		if len(elem) == 0 {
 			continue

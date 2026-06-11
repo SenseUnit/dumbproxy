@@ -127,7 +127,7 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 				req.Context(),
 				username,
 				wrapPendingWrite(
-					[]byte(fmt.Sprintf("HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor)),
+					fmt.Appendf(nil, "HTTP/%d.%d 200 OK\r\n\r\n", req.ProtoMajor, req.ProtoMinor),
 					localconn,
 				),
 				conn,

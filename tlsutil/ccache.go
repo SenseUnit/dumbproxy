@@ -226,55 +226,55 @@ type bboltLogger struct {
 	l *clog.CondLogger
 }
 
-func (l bboltLogger) Debug(v ...interface{}) {
+func (l bboltLogger) Debug(v ...any) {
 	l.l.Debug("%s", fmt.Sprint(v...))
 }
 
-func (l bboltLogger) Debugf(format string, v ...interface{}) {
+func (l bboltLogger) Debugf(format string, v ...any) {
 	l.l.Debug(format, v...)
 }
 
-func (l bboltLogger) Error(v ...interface{}) {
+func (l bboltLogger) Error(v ...any) {
 	l.l.Error("%s", fmt.Sprint(v...))
 }
 
-func (l bboltLogger) Errorf(format string, v ...interface{}) {
+func (l bboltLogger) Errorf(format string, v ...any) {
 	l.l.Error(format, v...)
 }
 
-func (l bboltLogger) Info(v ...interface{}) {
+func (l bboltLogger) Info(v ...any) {
 	l.l.Info("%s", fmt.Sprint(v...))
 }
 
-func (l bboltLogger) Infof(format string, v ...interface{}) {
+func (l bboltLogger) Infof(format string, v ...any) {
 	l.l.Info(format, v...)
 }
 
-func (l bboltLogger) Warning(v ...interface{}) {
+func (l bboltLogger) Warning(v ...any) {
 	l.l.Warning("%s", fmt.Sprint(v...))
 }
 
-func (l bboltLogger) Warningf(format string, v ...interface{}) {
+func (l bboltLogger) Warningf(format string, v ...any) {
 	l.l.Warning(format, v...)
 }
 
-func (l bboltLogger) Fatal(v ...interface{}) {
+func (l bboltLogger) Fatal(v ...any) {
 	l.l.Critical("%s", fmt.Sprint(v...))
 	os.Exit(1)
 }
 
-func (l bboltLogger) Fatalf(format string, v ...interface{}) {
+func (l bboltLogger) Fatalf(format string, v ...any) {
 	l.l.Critical(format, v...)
 	os.Exit(1)
 }
 
-func (l bboltLogger) Panic(v ...interface{}) {
+func (l bboltLogger) Panic(v ...any) {
 	s := fmt.Sprint(v...)
 	l.l.Critical("%s", s)
 	panic(s)
 }
 
-func (l bboltLogger) Panicf(format string, v ...interface{}) {
+func (l bboltLogger) Panicf(format string, v ...any) {
 	s := fmt.Sprintf(format, v...)
 	l.l.Critical("%s", s)
 	panic(s)

@@ -36,7 +36,7 @@ func delHopHeaders(header http.Header) {
 	}
 }
 
-func hijack(hijackable interface{}) (net.Conn, *bufio.ReadWriter, error) {
+func hijack(hijackable any) (net.Conn, *bufio.ReadWriter, error) {
 	hj, ok := hijackable.(http.Hijacker)
 	if !ok {
 		return nil, nil, errors.New("Connection doesn't support hijacking")
@@ -54,7 +54,7 @@ func hijack(hijackable interface{}) (net.Conn, *bufio.ReadWriter, error) {
 	return conn, rw, nil
 }
 
-func flush(flusher interface{}) bool {
+func flush(flusher any) bool {
 	f, ok := flusher.(http.Flusher)
 	if !ok {
 		return false

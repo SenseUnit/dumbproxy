@@ -10,7 +10,7 @@ import (
 
 func mkbytes(l uint) []byte {
 	b := make([]byte, l)
-	for i := uint(0); i < l; i++ {
+	for i := range l {
 		b[i] = byte(i)
 	}
 	return b

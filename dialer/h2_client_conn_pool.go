@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 
 	"golang.org/x/net/http/httpguts"
@@ -44,21 +45,12 @@ func isConnectionCloseRequest(req *http.Request) bool {
 	return req.Close || httpguts.HeaderValuesContainsToken(req.Header["Connection"], "close")
 }
 
-func strSliceContains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
-}
-
 func (p *clientConnPool) newTLSConfig(host string) *tls.Config {
 	cfg := new(tls.Config)
 	if p.t.TLSClientConfig != nil {
 		*cfg = *p.t.TLSClientConfig.Clone()
 	}
-	if !strSliceContains(cfg.NextProtos, http2.NextProtoTLS) {
+	if !slices.Contains(cfg.NextProtos, http2.NextProtoTLS) {
 		cfg.NextProtos = append([]string{http2.NextProtoTLS}, cfg.NextProtos...)
 	}
 	if cfg.ServerName == "" {
@@ -259,10 +251,8 @@ func (c *addConnCall) run(t *http2.Transport, key string, nc net.Conn) {
 
 // p.mu must be held
 func (p *clientConnPool) addConnLocked(key string, cc *http2.ClientConn) {
-	for _, v := range p.conns {
-		if v == cc {
-			return
-		}
+	if slices.Contains(p.conns, cc) {
+		return
 	}
 	p.conns = append(p.conns, cc)
 }
