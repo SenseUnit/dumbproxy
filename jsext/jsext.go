@@ -18,6 +18,7 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddStopAddressIteration,
 		AddMMDBReader,
 		ExportEnv,
+		AddConvertAddr,
 	} {
 		if err := f(vm); err != nil {
 			return fmt.Errorf("JS runtime init part #%d failed: %w", idx+1, err)
