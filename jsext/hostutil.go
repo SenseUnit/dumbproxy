@@ -31,3 +31,20 @@ func AddDNSDomainIs(vm *goja.Runtime) error {
 		return vm.ToValue(strings.HasSuffix(host, domain))
 	})
 }
+
+func AddLocalHostOrDomainIs(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("localHostOrDomainIs", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 2 {
+			return vm.ToValue(false)
+		}
+		host := strings.ToLower(call.Argument(0).String())
+		domain := strings.ToLower(call.Argument(1).String())
+		if host == domain {
+			return vm.ToValue(true)
+		}
+		if strings.Contains(host, ".") {
+			return vm.ToValue(false)
+		}
+		return vm.ToValue(strings.HasPrefix(domain, host+"."))
+	})
+}
