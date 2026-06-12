@@ -48,3 +48,14 @@ func AddLocalHostOrDomainIs(vm *goja.Runtime) error {
 		return vm.ToValue(strings.HasPrefix(domain, host+"."))
 	})
 }
+
+func AddDNSDomainLevels(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("dnsDomainLevels", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 1 {
+			return vm.ToValue(0)
+		}
+		name := call.Argument(0).String()
+		name, _ = strings.CutSuffix(name, ".")
+		return vm.ToValue(strings.Count(name, "."))
+	})
+}
