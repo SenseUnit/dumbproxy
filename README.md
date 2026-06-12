@@ -452,6 +452,7 @@ Following builtin functions are addionally available within JS scripts:
     * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
 * Address manipulation:
   * `isPlainHostName(host: string): boolean` - returns true if and only if there is no domain name in the hostname (no dots).
+  * `dnsDomainIs(host: string, domain: string): boolean` - returns true if and only if the domain of hostname matches.
   * `convert_addr(IP: string): number | BigInt` - returns numeric representation of IP address or `NaN` if argument can't be converted to an IP address. IPv6 addresses are converted to BigInt.
   * `shExpMatch(str: string, shExp: string): boolean` - Returns true if the string matches the specified shell glob expression.
   * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
