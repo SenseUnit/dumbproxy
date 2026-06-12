@@ -450,6 +450,8 @@ Following builtin functions are addionally available within JS scripts:
 * GeoIP integration:
   * `mmdbOpen(path: string): mmdbReaderObject` - opens MaxMind database and returns a reader object which has only one method:
     * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
+* Time based conditions:
+  * `weekdayRange(wd1: string, wd2: string, gmt: string): boolean` - returns true if current day of week is between wd1 and wd2, including ends. Week days are in following order: `"SUN"`, `"MON"`, `"TUE"`, `"WED"`, `"THU"`, `"FRI"`, `"SAT"`. If `gmt` parameter is present and equals `"GMT"`, GMT time is used. See also [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#weekdayrange).
 * Address manipulation:
   * `isPlainHostName(host: string): boolean` - returns true if and only if there is no domain name in the hostname (no dots).
   * `dnsDomainIs(host: string, domain: string): boolean` - returns true if and only if the domain of hostname matches.
