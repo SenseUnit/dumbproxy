@@ -443,6 +443,7 @@ Following properties of returned object are recognized:
 Following builtin functions are addionally available within JS scripts:
 
 * `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
+* `alert(val)` - print arbitrary values *val* into dumbproxy log for error reporting purposes.
 * `readFile(path: string): string` - read file from *path* and return its content as a string.
 * `mmdbOpen(path: string): mmdbReaderObject` - opens MaxMind database and returns a reader object which has only one method:
   * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
