@@ -452,6 +452,7 @@ Following builtin functions are addionally available within JS scripts:
 Following objects are additionally available in global scope of JS scripts:
 
 * `env` - readonly object containing all environment variables.
+* `ProxyObject.bindings` - empty initialized object for compatibility with old PAC scripts.
 
 ## Supported upstream proxy schemes
 

@@ -42,7 +42,11 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 			}
 			err = jsext.ConfigureRuntime(vm)
 			if err != nil {
-				return fmt.Errorf("can't configure runtime runtime: %w", err)
+				return fmt.Errorf("can't configure runtime: %w", err)
+			}
+			err = jsext.AddPOBindings(vm)
+			if err != nil {
+				return fmt.Errorf("can't add ProxyObject.bindings into execution context: %w", err)
 			}
 			_, err = vm.RunString(string(script))
 			if err != nil {
