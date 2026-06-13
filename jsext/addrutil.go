@@ -214,3 +214,29 @@ func AddSortIPAddressList(vm *goja.Runtime) error {
 		return vm.ToValue(strings.Join(res, ";"))
 	})
 }
+
+func dnsResolveEx(host string) []netip.Addr {
+	ctx, cl := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cl()
+	// lookup "ip" network for better cache coherence with other lookups,
+	// even though we actually interested only in IPv4 only
+	addrs, err := DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil
+	}
+	for i := range addrs {
+		addrs[i] = addrs[i].Unmap()
+	}
+	return addrs
+}
+
+
+func AddDNSResolveEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("dnsResolveEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("dnsResolveEx expects exactly 1 argument"))
+		}
+		res := mapSlice(dnsResolveEx(call.Argument(0).String()), func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
+	})
+}

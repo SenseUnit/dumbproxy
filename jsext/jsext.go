@@ -30,6 +30,7 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddMyIPAddress,
 		AddMyIPAddressEx,
 		AddDNSResolve,
+		AddDNSResolveEx,
 		AddIsResolvable,
 		AddIsInNet,
 		AddSortIPAddressList,
