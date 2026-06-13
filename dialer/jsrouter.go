@@ -21,7 +21,7 @@ import (
 type JSRouterFunc = func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, username string) (string, error)
 type JSFindProxyForURLFunc = func(url, host string) (string, error)
 
-func WrapJSFindProxyForURLFunc(f JSFindProxyForURLFunc) JSRouterFunc {
+func WrapJSFindProxyForURLFunc(f JSFindProxyForURLFunc, logger *clog.CondLogger) JSRouterFunc {
 	return func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, _ string) (string, error) {
 		h := dst.OriginalHost
 		scheme := "https"
@@ -36,6 +36,7 @@ func WrapJSFindProxyForURLFunc(f JSFindProxyForURLFunc) JSRouterFunc {
 		if err != nil {
 			return "", err
 		}
+		logger.Debug("FindProxyForURL(%q, %q) -> %q", u, h, pSpec)
 		pSpec, _, _ = strings.Cut(pSpec, ";")
 		pSpec = strings.TrimSpace(pSpec)
 		pType, pAddr, _ := strings.Cut(pSpec, " ")
@@ -111,7 +112,7 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 				if err != nil {
 					return fmt.Errorf("can't export \"FindProxyForURL\" function from JS VM: %w", err)
 				}
-				f = WrapJSFindProxyForURLFunc(lf)
+				f = WrapJSFindProxyForURLFunc(lf, logger)
 			} else {
 				err = vm.ExportTo(routerFnJSVal, &f)
 				if err != nil {
