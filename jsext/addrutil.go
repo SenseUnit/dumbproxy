@@ -110,3 +110,13 @@ func AddDNSResolve(vm *goja.Runtime) error {
 		return goja.Null()
 	})
 }
+
+func AddIsResolvable(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isResolvable", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("isResolvable expects exactly 1 argument"))
+		}
+		res := dnsResolve(call.Argument(0).String())
+		return vm.ToValue(res.IsValid())
+	})
+}
