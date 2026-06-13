@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/dop251/goja"
 	"golang.org/x/sync/errgroup"
@@ -16,6 +19,40 @@ import (
 )
 
 type JSRouterFunc = func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, username string) (string, error)
+type JSFindProxyForURLFunc = func(url, host string) (string, error)
+
+func WrapJSFindProxyForURLFunc(f JSFindProxyForURLFunc) JSRouterFunc {
+	return func(req *jsext.JSRequestInfo, dst *jsext.JSDstInfo, _ string) (string, error) {
+		h := dst.OriginalHost
+		scheme := "https"
+		if req != nil && req.Method != "CONNECT" {
+			scheme = "http"
+		}
+		u := &url.URL{
+			Scheme: scheme,
+			Host:   net.JoinHostPort(dst.OriginalHost, strconv.Itoa(int(dst.Port))),
+		}
+		pSpec, err := f(u.String(), h)
+		if err != nil {
+			return "", err
+		}
+		pSpec, _, _ = strings.Cut(pSpec, ";")
+		pSpec = strings.TrimSpace(pSpec)
+		pType, pAddr, _ := strings.Cut(pSpec, " ")
+		pAddr = strings.TrimSpace(pAddr)
+		switch pType {
+		case "", "DIRECT":
+			return "", nil
+		case "HTTP", "PROXY":
+			return "http://" + pAddr, nil
+		case "HTTPS":
+			return "https://" + pAddr, nil
+		case "SOCKS", "SOCKS5":
+			return "socks5://" + pAddr, nil
+		}
+		return "", fmt.Errorf("FindProxyForURL returned unsupported proxy type: %q", pType)
+	}
+}
 
 type JSRouter struct {
 	funcPool     chan JSRouterFunc
@@ -58,14 +95,28 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 			if ex := vm.Try(func() {
 				routerFnJSVal = vm.Get("getProxy")
 			}); ex != nil {
-				return fmt.Errorf("\"getProxy\" function cannot be located in VM context: %w", err)
+				return fmt.Errorf("\"getProxy\" function cannot be located in VM context: %w", ex)
 			}
 			if routerFnJSVal == nil {
-				return errors.New("\"getProxy\" function is not defined")
-			}
-			err = vm.ExportTo(routerFnJSVal, &f)
-			if err != nil {
-				return fmt.Errorf("can't export \"getProxy\" function from JS VM: %w", err)
+				if ex := vm.Try(func() {
+					routerFnJSVal = vm.Get("FindProxyForURL")
+				}); ex != nil {
+					return fmt.Errorf("\"FindProxyForURL\" function cannot be located in VM context: %w", ex)
+				}
+				if routerFnJSVal == nil {
+					return errors.New("neither \"getProxy\" nor \"FindProxyForURL\" function is defined")
+				}
+				var lf JSFindProxyForURLFunc
+				err := vm.ExportTo(routerFnJSVal, &lf)
+				if err != nil {
+					return fmt.Errorf("can't export \"FindProxyForURL\" function from JS VM: %w", err)
+				}
+				f = WrapJSFindProxyForURLFunc(lf)
+			} else {
+				err = vm.ExportTo(routerFnJSVal, &f)
+				if err != nil {
+					return fmt.Errorf("can't export \"getProxy\" function from JS VM: %w", err)
+				}
 			}
 
 			pool <- f

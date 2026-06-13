@@ -401,6 +401,8 @@ function getProxy(req, dst, username) {
 > 
 > This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
 
+Alternatively, for sake of native compatibility with PAC files, scripting engine will search for `FindProxyForURL(url, host)` function and use it in absense of defined `getProxy` function.
+
 ### Bandwidth limit definition by JS script
 
 dumbproxy can retrieve bandwidth limit parameters defined by result of `bwLimit` JS function from file specified by `-js-bw-limit` option.
