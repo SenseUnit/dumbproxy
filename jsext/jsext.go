@@ -26,6 +26,7 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddDNSDomainLevels,
 		AddWeekdayRange,
 		AddDateRange,
+		AddTimeRange,
 	} {
 		if err := f(vm); err != nil {
 			return fmt.Errorf("JS runtime init part #%d failed: %w", idx+1, err)

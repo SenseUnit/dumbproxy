@@ -215,3 +215,54 @@ func AddDateRange(vm *goja.Runtime) error {
 		return vm.ToValue(dateRange(mapSlice(call.Arguments, func(v goja.Value) string { return v.String() })...))
 	})
 }
+
+func timeRange(gmt bool, args ...int) bool {
+	now := time.Now()
+	if gmt {
+		now = now.UTC()
+	}
+	curHour := now.Hour()
+	curMin := now.Minute()
+	curSec := now.Second()
+	switch len(args) {
+	case 1:
+		return curHour == args[0]
+	case 2:
+		return curHour >= args[0] && curHour <= args[1]
+	case 4:
+		h1, m1 := args[0], args[1]
+		h2, m2 := args[2], args[3]
+		curTotalMin := (curHour * 60) + curMin
+		startTotalMin := (h1 * 60) + m1
+		endTotalMin := (h2 * 60) + m2
+		return curTotalMin >= startTotalMin && curTotalMin <= endTotalMin
+	case 6:
+		h1, m1, s1 := args[0], args[1], args[2]
+		h2, m2, s2 := args[3], args[4], args[5]
+		curTotalSec := (curHour * 3600) + (curMin * 60) + curSec
+		startTotalSec := (h1 * 3600) + (m1 * 60) + s1
+		endTotalSec := (h2 * 3600) + (m2 * 60) + s2
+		return curTotalSec >= startTotalSec && curTotalSec <= endTotalSec
+	}
+	return false
+}
+
+func AddTimeRange(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("timeRange", func(call goja.FunctionCall) goja.Value {
+		args := call.Arguments
+		if len(args) == 0 {
+			return vm.ToValue(false)
+		}
+		gmt := false
+		if strings.ToUpper(args[len(args)-1].String()) == "GMT" {
+			gmt = true
+			args = args[:len(args)-1]
+		}
+		return vm.ToValue(
+			timeRange(
+				gmt,
+				mapSlice(args, func(v goja.Value) int { return int(v.ToInteger()) })...,
+			),
+		)
+	})
+}
