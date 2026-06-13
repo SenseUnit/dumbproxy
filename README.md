@@ -463,7 +463,8 @@ Following builtin functions are addionally available within JS scripts:
   * `localHostOrDomainIs(host: string, hostDom: string): boolean` - returns true if the hostname matches exactly the specified hostname, or if there is no domain name part in the hostname, but the unqualified hostname matches.
   * `dnsDomainLevels(host: string): number` - returns the number (integer) of DNS domain levels (number of dots) in the hostname. Trailing dot representing DNS root is stripped from domain name before counting.
   * `convert_addr(IP: string): number | BigInt` - returns numeric representation of IP address or `NaN` if argument can't be converted to an IP address. IPv6 addresses are converted to BigInt.
-  * `shExpMatch(str: string, shExp: string): boolean` - Returns true if the string matches the specified shell glob expression.
+  * `shExpMatch(str: string, shExp: string): boolean` - returns true if the string matches the specified shell glob expression.
+  * `dnsResolve(host: string): string | null` - resolves the given DNS hostname into an IP address, and returns it in the dot-separated format as a string. **WARNING:** expect heavy performance penalty from use of this function.
   * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:

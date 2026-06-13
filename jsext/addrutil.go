@@ -1,13 +1,21 @@
 package jsext
 
 import (
+	"context"
 	"encoding/binary"
 	"math/big"
 	"net"
 	"net/netip"
+	"time"
 
 	"github.com/dop251/goja"
 )
+
+type Resolver interface {
+	LookupNetIP(context.Context, string, string) ([]netip.Addr, error)
+}
+
+var DefaultResolver Resolver = net.DefaultResolver
 
 func AddConvertAddr(vm *goja.Runtime) error {
 	return vm.GlobalObject().Set("convert_addr", func(call goja.FunctionCall) goja.Value {
@@ -69,5 +77,36 @@ func myIPAddress() netip.Addr {
 func AddMyIPAddress(vm *goja.Runtime) error {
 	return vm.GlobalObject().Set("myIpAddress", func(call goja.FunctionCall) goja.Value {
 		return vm.ToValue(myIPAddress().String())
+	})
+}
+
+func dnsResolve(host string) (res netip.Addr) {
+	ctx, cl := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cl()
+	// lookup "ip" network for better cache coherence with other lookups,
+	// even though we actually interested only in IPv4 only
+	addrs, err := DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return
+	}
+	for _, ip := range addrs {
+		ip = ip.Unmap()
+		if ip.Is4() {
+			return ip
+		}
+	}
+	return
+}
+
+func AddDNSResolve(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("dnsResolve", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("dnsResolve expects exactly 1 argument"))
+		}
+		res := dnsResolve(call.Argument(0).String())
+		if res.IsValid() {
+			return vm.ToValue(res.String())
+		}
+		return goja.Null()
 	})
 }
