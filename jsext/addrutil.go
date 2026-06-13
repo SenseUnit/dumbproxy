@@ -17,6 +17,10 @@ type Resolver interface {
 
 var DefaultResolver Resolver = net.DefaultResolver
 
+func ipv4ToUint32(ip netip.Addr) uint32 {
+	return binary.BigEndian.Uint32(ip.AsSlice())
+}
+
 func AddConvertAddr(vm *goja.Runtime) error {
 	return vm.GlobalObject().Set("convert_addr", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 1 {
@@ -27,7 +31,7 @@ func AddConvertAddr(vm *goja.Runtime) error {
 			return goja.NaN()
 		}
 		if addr.Is4() {
-			return vm.ToValue(binary.BigEndian.Uint32(addr.AsSlice()))
+			return vm.ToValue(ipv4ToUint32(addr))
 		} else {
 			bi := new(big.Int)
 			bi.SetBytes(addr.AsSlice())
@@ -118,5 +122,29 @@ func AddIsResolvable(vm *goja.Runtime) error {
 		}
 		res := dnsResolve(call.Argument(0).String())
 		return vm.ToValue(res.IsValid())
+	})
+}
+
+func AddIsInNet(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isInNet", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 3 {
+			panic(vm.NewTypeError("isInNet expects exactly 3 arguments"))
+		}
+		res := dnsResolve(call.Argument(0).String())
+		if !res.IsValid() {
+			return vm.ToValue(false)
+		}
+		pattern, err := netip.ParseAddr(call.Argument(1).String())
+		if err != nil || !pattern.Is4() {
+			return vm.ToValue(false)
+		}
+		mask, err := netip.ParseAddr(call.Argument(2).String())
+		if err != nil || !pattern.Is4() {
+			return vm.ToValue(false)
+		}
+		m := ipv4ToUint32(mask)
+		p := ipv4ToUint32(pattern)
+		r := ipv4ToUint32(res)
+		return vm.ToValue(r&m == p&m)
 	})
 }

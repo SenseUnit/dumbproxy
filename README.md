@@ -466,6 +466,7 @@ Following builtin functions are addionally available within JS scripts:
   * `shExpMatch(str: string, shExp: string): boolean` - returns true if the string matches the specified shell glob expression.
   * `dnsResolve(host: string): string | null` - resolves the given DNS hostname into an IP address, and returns it in the dot-separated format as a string. **WARNING:** expect heavy performance penalty from use of this function.
   * `isResolvable(host: string): boolean` - tries to resolve the hostname. Returns true if succeeds. **WARNING:** expect heavy performance penalty from use of this function.
+  * `isInNet(host: string, pattern: string, mask: string): boolean` - true if and only if the IP address of the host matches the specified IP address pattern. See also [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#isinnet). **WARNING:** expect heavy performance penalty from use of this function if invoked with domain name as host argument.
   * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:
