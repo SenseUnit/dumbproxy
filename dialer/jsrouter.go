@@ -86,6 +86,10 @@ func NewJSRouter(filename string, instances int, factory func(string) (Dialer, e
 			if err != nil {
 				return fmt.Errorf("can't add ProxyObject.bindings into execution context: %w", err)
 			}
+			err = jsext.AddGetClientVersion(vm)
+			if err != nil {
+				return fmt.Errorf("can't add getClientVersion function: %w", err)
+			}
 			_, err = vm.RunString(string(script))
 			if err != nil {
 				return fmt.Errorf("script run failed: %w", err)

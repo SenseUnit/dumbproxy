@@ -39,3 +39,11 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 	}
 	return nil
 }
+
+const PACClientVersion = "1.0"
+
+func AddGetClientVersion(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("getClientVersion", func(call goja.FunctionCall) goja.Value {
+		return vm.ToValue(PACClientVersion)
+	})
+}
