@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"net"
 	"net/netip"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/dop251/goja"
@@ -146,5 +148,121 @@ func AddIsInNet(vm *goja.Runtime) error {
 		p := ipv4ToUint32(pattern)
 		r := ipv4ToUint32(res)
 		return vm.ToValue(r&m == p&m)
+	})
+}
+
+func myIPAddressEx() []netip.Addr {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	res := make([]netip.Addr, 0, len(addrs))
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		na, ok := netip.AddrFromSlice(ipnet.IP)
+		if !ok {
+			continue
+		}
+		res = append(res, na.Unmap())
+	}
+	return res
+}
+
+func AddMyIPAddressEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("myIpAddressEx", func(call goja.FunctionCall) goja.Value {
+		res := mapSlice(myIPAddressEx(), func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
+	})
+}
+
+func netipAddrCmp(a, b netip.Addr) int {
+	if a.Is6() == b.Is6() {
+		if a.Less(b) {
+			return -1
+		} else if b.Less(a) {
+			return 1
+		}
+		return 0
+	} else {
+		if a.Is6() {
+			return -1
+		} else {
+			return 1
+		}
+	}
+}
+
+func AddSortIPAddressList(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("sortIpAddressList", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("sortIpAddressList expects exactly 1 argument"))
+		}
+		addrParts := strings.Split(call.Argument(0).String(), ";")
+		addrs := make([]netip.Addr, 0, len(addrParts))
+		for _, part := range addrParts {
+			addr, err := netip.ParseAddr(part)
+			if err != nil {
+				return vm.ToValue("")
+			}
+			addrs = append(addrs, addr)
+		}
+		slices.SortFunc(addrs, netipAddrCmp)
+		res := mapSlice(addrs, func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
+	})
+}
+
+func dnsResolveEx(host string) []netip.Addr {
+	ctx, cl := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cl()
+	// lookup "ip" network for better cache coherence with other lookups,
+	// even though we actually interested only in IPv4 only
+	addrs, err := DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil
+	}
+	for i := range addrs {
+		addrs[i] = addrs[i].Unmap()
+	}
+	return addrs
+}
+
+func AddDNSResolveEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("dnsResolveEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("dnsResolveEx expects exactly 1 argument"))
+		}
+		res := mapSlice(dnsResolveEx(call.Argument(0).String()), func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
+	})
+}
+
+func AddIsResolvableEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isResolvableEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("isResolvableEx expects exactly 1 argument"))
+		}
+		res := dnsResolveEx(call.Argument(0).String())
+		return vm.ToValue(len(res) > 0)
+	})
+}
+
+func AddIsInNetEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isInNetEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			panic(vm.NewTypeError("isInNet expects exactly 2 arguments"))
+		}
+		host, err := netip.ParseAddr(call.Argument(0).String())
+		if err != nil {
+			return vm.ToValue(false)
+		}
+		pfx, err := netip.ParsePrefix(call.Argument(1).String())
+		if err != nil {
+			return vm.ToValue(false)
+		}
+		return vm.ToValue(pfx.Contains(host))
 	})
 }

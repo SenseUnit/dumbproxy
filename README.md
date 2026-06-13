@@ -459,6 +459,7 @@ Following builtin functions are addionally available within JS scripts:
   * `timeRange(...): boolean` - returns true if current time matches specified time range. See [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#timerange).
 * Address manipulation:
   * `myIpAddress(): string` - returns the IP address of the machine dumbproxy is running on.
+  * `myIpAddressEx(): string` - returns semi-colon delimited string containing all IP addresses for localhost (IPv6 and/or IPv4), or an empty string if unable to resolve localhost to an IP address.
   * `isPlainHostName(host: string): boolean` - returns true if and only if there is no domain name in the hostname (no dots).
   * `dnsDomainIs(host: string, domain: string): boolean` - returns true if and only if the domain of hostname matches.
   * `localHostOrDomainIs(host: string, hostDom: string): boolean` - returns true if the hostname matches exactly the specified hostname, or if there is no domain name part in the hostname, but the unqualified hostname matches.
@@ -466,8 +467,12 @@ Following builtin functions are addionally available within JS scripts:
   * `convert_addr(IP: string): number | BigInt` - returns numeric representation of IP address or `NaN` if argument can't be converted to an IP address. IPv6 addresses are converted to BigInt.
   * `shExpMatch(str: string, shExp: string): boolean` - returns true if the string matches the specified shell glob expression.
   * `dnsResolve(host: string): string | null` - resolves the given DNS hostname into an IP address, and returns it in the dot-separated format as a string. **WARNING:** expect heavy performance penalty from use of this function.
-  * `isResolvable(host: string): boolean` - tries to resolve the hostname. Returns true if succeeds. **WARNING:** expect heavy performance penalty from use of this function.
+  * `dnsResolveEx(host: string): string` - returns semicolon delimited string containing IPv6 and IPv4 addresses or an empty string if host is not resolvable. **WARNING:** expect heavy performance penalty from use of this function.
+  * `isResolvable(host: string): boolean` - tries to resolve the hostname to IPv4 address. Returns true if succeeds. **WARNING:** expect heavy performance penalty from use of this function.
+  * `isResolvableEx(host: string): boolean` - tries to resolve the hostname to IPv4 or IPv6 address. Returns true if succeeds. **WARNING:** expect heavy performance penalty from use of this function.
   * `isInNet(host: string, pattern: string, mask: string): boolean` - true if and only if the IP address of the host matches the specified IP address pattern. See also [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#isinnet). **WARNING:** expect heavy performance penalty from use of this function if invoked with domain name as host argument.
+  * `isInNetEx(host: string, cidrPrefix: string): boolean` - true if and only if the IP address of the host matches the specified IP address prefix. See also [full documentation](https://learn.microsoft.com/en-us/windows/win32/winhttp/isinnetex).
+  * `sortIpAddressList(host: string): string` - returns list of sorted semi-colon delimited IP addresses or an empty string if unable to sort the IP address list.
   * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:

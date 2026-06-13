@@ -28,13 +28,26 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddDateRange,
 		AddTimeRange,
 		AddMyIPAddress,
+		AddMyIPAddressEx,
 		AddDNSResolve,
+		AddDNSResolveEx,
 		AddIsResolvable,
+		AddIsResolvableEx,
 		AddIsInNet,
+		AddIsInNetEx,
+		AddSortIPAddressList,
 	} {
 		if err := f(vm); err != nil {
 			return fmt.Errorf("JS runtime init part #%d failed: %w", idx+1, err)
 		}
 	}
 	return nil
+}
+
+const PACClientVersion = "1.0"
+
+func AddGetClientVersion(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("getClientVersion", func(call goja.FunctionCall) goja.Value {
+		return vm.ToValue(PACClientVersion)
+	})
 }
