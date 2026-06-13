@@ -745,7 +745,7 @@ func run() int {
 
 	// unholy plug
 	if args.tt {
-		dialerRoot = dialer.NewTTInterceptor(dialerRoot, ttDemuxLogger)
+		dialerRoot = dialer.NewTTInterceptor(dialerRoot, []netip.Prefix(args.denyDstAddr), ttDemuxLogger)
 	}
 
 	// handler requisites
