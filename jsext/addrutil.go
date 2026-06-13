@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/dop251/goja"
@@ -146,5 +147,32 @@ func AddIsInNet(vm *goja.Runtime) error {
 		p := ipv4ToUint32(pattern)
 		r := ipv4ToUint32(res)
 		return vm.ToValue(r&m == p&m)
+	})
+}
+
+func myIPAddressEx() []netip.Addr {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	res := make([]netip.Addr, 0, len(addrs))
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		na, ok := netip.AddrFromSlice(ipnet.IP)
+		if !ok {
+			continue
+		}
+		res = append(res, na.Unmap())
+	}
+	return res
+}
+
+func AddMyIPAddressEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("myIpAddressEx", func(call goja.FunctionCall) goja.Value {
+		res := mapSlice(myIPAddressEx(), func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
 	})
 }

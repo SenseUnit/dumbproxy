@@ -28,6 +28,7 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddDateRange,
 		AddTimeRange,
 		AddMyIPAddress,
+		AddMyIPAddressEx,
 		AddDNSResolve,
 		AddIsResolvable,
 		AddIsInNet,

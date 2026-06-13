@@ -459,6 +459,7 @@ Following builtin functions are addionally available within JS scripts:
   * `timeRange(...): boolean` - returns true if current time matches specified time range. See [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#timerange).
 * Address manipulation:
   * `myIpAddress(): string` - returns the IP address of the machine dumbproxy is running on.
+  * `myIpAddressEx(): string` - returns semi-colon delimited string containing all IP addresses for localhost (IPv6 and/or IPv4), or an empty string if unable to resolve localhost to an IP address.
   * `isPlainHostName(host: string): boolean` - returns true if and only if there is no domain name in the hostname (no dots).
   * `dnsDomainIs(host: string, domain: string): boolean` - returns true if and only if the domain of hostname matches.
   * `localHostOrDomainIs(host: string, hostDom: string): boolean` - returns true if the hostname matches exactly the specified hostname, or if there is no domain name part in the hostname, but the unqualified hostname matches.
