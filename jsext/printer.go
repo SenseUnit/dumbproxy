@@ -9,12 +9,25 @@ import (
 )
 
 func AddPrinter(vm *goja.Runtime, logger *clog.CondLogger) error {
-	return vm.GlobalObject().Set("print", func(call goja.FunctionCall) goja.Value {
+	if err := vm.GlobalObject().Set("print", func(call goja.FunctionCall) goja.Value {
 		printArgs := make([]any, len(call.Arguments))
 		for i, arg := range call.Arguments {
 			printArgs[i] = arg
 		}
 		logger.Info("%s", fmt.Sprintln(printArgs...))
 		return goja.Undefined()
-	})
+	}); err != nil {
+		return err
+	}
+	if err := vm.GlobalObject().Set("alert", func(call goja.FunctionCall) goja.Value {
+		printArgs := make([]any, len(call.Arguments))
+		for i, arg := range call.Arguments {
+			printArgs[i] = arg
+		}
+		logger.Error("%s", fmt.Sprintln(printArgs...))
+		return goja.Undefined()
+	}); err != nil {
+		return err
+	}
+	return nil
 }

@@ -44,6 +44,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
 * Scripting with JavaScript:
   * Access filter by JS function
   * Upstream proxy selection by JS function
+    * Native PAC file support is also available for compatibility with existing solutions
   * Bandwidth limits by JS function
   * GeoIP integration
 * Seamless proxy client integration with OpenSSH: `ssh -o ProxyCommand="dumbproxy -config proxy.cfg -mode stdio %h %p" root@server1`
@@ -401,6 +402,8 @@ function getProxy(req, dst, username) {
 > 
 > This shouldn't be much of concern, though, if `getProxy` function doesn't use dst.resolvedHost and returns consistent values across invocations with the rest of inputs having same values.
 
+Alternatively, for sake of native compatibility with PAC files, scripting engine will search for `FindProxyForURL(url, host)` function and use it in absense of defined `getProxy` function.
+
 ### Bandwidth limit definition by JS script
 
 dumbproxy can retrieve bandwidth limit parameters defined by result of `bwLimit` JS function from file specified by `-js-bw-limit` option.
@@ -442,15 +445,35 @@ Following properties of returned object are recognized:
 
 Following builtin functions are addionally available within JS scripts:
 
-* `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
-* `readFile(path: string): string` - read file from *path* and return its content as a string.
-* `mmdbOpen(path: string): mmdbReaderObject` - opens MaxMind database and returns a reader object which has only one method:
-  * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
-* `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
+* Logging and error reporting:
+  * `print(val)` - print arbitrary values *val* into dumbproxy log for debugging purposes.
+  * `alert(val)` - print arbitrary values *val* into dumbproxy log for error reporting purposes.
+* File I/O:
+  * `readFile(path: string): string` - read file from *path* and return its content as a string.
+* GeoIP integration:
+  * `mmdbOpen(path: string): mmdbReaderObject` - opens MaxMind database and returns a reader object which has only one method:
+    * `lookup(IP: string): mmdbRecordObject` - returns JS object with information about IP address or throws an exception if record was not found. See detailed example in the project's wiki.
+* Time based conditions:
+  * `weekdayRange(wd1: string, wd2: string, gmt: string): boolean` - returns true if current day of week is between wd1 and wd2, including ends. Week days are in following order: `"SUN"`, `"MON"`, `"TUE"`, `"WED"`, `"THU"`, `"FRI"`, `"SAT"`. If `gmt` parameter is present and equals `"GMT"`, GMT time is used. See also [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#weekdayrange).
+  * `dateRange(...): boolean` - returns true if current time matches specified date range. See [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#daterange).
+  * `timeRange(...): boolean` - returns true if current time matches specified time range. See [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#timerange).
+* Address manipulation:
+  * `myIpAddress(): string` - returns the IP address of the machine dumbproxy is running on.
+  * `isPlainHostName(host: string): boolean` - returns true if and only if there is no domain name in the hostname (no dots).
+  * `dnsDomainIs(host: string, domain: string): boolean` - returns true if and only if the domain of hostname matches.
+  * `localHostOrDomainIs(host: string, hostDom: string): boolean` - returns true if the hostname matches exactly the specified hostname, or if there is no domain name part in the hostname, but the unqualified hostname matches.
+  * `dnsDomainLevels(host: string): number` - returns the number (integer) of DNS domain levels (number of dots) in the hostname. Trailing dot representing DNS root is stripped from domain name before counting.
+  * `convert_addr(IP: string): number | BigInt` - returns numeric representation of IP address or `NaN` if argument can't be converted to an IP address. IPv6 addresses are converted to BigInt.
+  * `shExpMatch(str: string, shExp: string): boolean` - returns true if the string matches the specified shell glob expression.
+  * `dnsResolve(host: string): string | null` - resolves the given DNS hostname into an IP address, and returns it in the dot-separated format as a string. **WARNING:** expect heavy performance penalty from use of this function.
+  * `isResolvable(host: string): boolean` - tries to resolve the hostname. Returns true if succeeds. **WARNING:** expect heavy performance penalty from use of this function.
+  * `isInNet(host: string, pattern: string, mask: string): boolean` - true if and only if the IP address of the host matches the specified IP address pattern. See also [full documentation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Proxy_servers_and_tunneling/Proxy_Auto-Configuration_PAC_file#isinnet). **WARNING:** expect heavy performance penalty from use of this function if invoked with domain name as host argument.
+  * `newStopAddressIteration(): Exception` - create an exception which, once `throw`n, halts further invocations of JS function with different resolved addresses for that request. Useful to cut excess JS calls of access filter scripts which can conclude access denial without looking further into remaining resolved addresses.
 
 Following objects are additionally available in global scope of JS scripts:
 
 * `env` - readonly object containing all environment variables.
+* `ProxyObject.bindings` - empty initialized object for compatibility with old PAC scripts.
 
 ## Supported upstream proxy schemes
 

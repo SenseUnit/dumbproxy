@@ -38,6 +38,7 @@ import (
 	"github.com/SenseUnit/dumbproxy/dialer"
 	"github.com/SenseUnit/dumbproxy/forward"
 	"github.com/SenseUnit/dumbproxy/handler"
+	"github.com/SenseUnit/dumbproxy/jsext"
 	clog "github.com/SenseUnit/dumbproxy/log"
 	"github.com/SenseUnit/dumbproxy/resolver"
 	"github.com/SenseUnit/dumbproxy/tlsutil"
@@ -703,6 +704,7 @@ func run() int {
 		)
 	}
 	nameResolver = resolver.Prefer(nameResolver, args.dnsPreferAddress.Value())
+	jsext.DefaultResolver = nameResolver
 
 	// construct dialers
 	var dialerRoot dialer.Dialer = dialer.NewBoundDialer(new(net.Dialer), args.sourceIPHints)
