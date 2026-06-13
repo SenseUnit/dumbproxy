@@ -230,7 +230,6 @@ func dnsResolveEx(host string) []netip.Addr {
 	return addrs
 }
 
-
 func AddDNSResolveEx(vm *goja.Runtime) error {
 	return vm.GlobalObject().Set("dnsResolveEx", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) != 1 {
@@ -238,5 +237,15 @@ func AddDNSResolveEx(vm *goja.Runtime) error {
 		}
 		res := mapSlice(dnsResolveEx(call.Argument(0).String()), func(a netip.Addr) string { return a.String() })
 		return vm.ToValue(strings.Join(res, ";"))
+	})
+}
+
+func AddIsResolvableEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isResolvableEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("isResolvableEx expects exactly 1 argument"))
+		}
+		res := dnsResolveEx(call.Argument(0).String())
+		return vm.ToValue(len(res) > 0)
 	})
 }
