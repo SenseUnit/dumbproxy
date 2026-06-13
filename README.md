@@ -44,6 +44,7 @@ Simple, scriptable, secure HTTP/SOCKS5 forward proxy.
 * Scripting with JavaScript:
   * Access filter by JS function
   * Upstream proxy selection by JS function
+    * Native PAC file support is also available for compatibility with existing solutions
   * Bandwidth limits by JS function
   * GeoIP integration
 * Seamless proxy client integration with OpenSSH: `ssh -o ProxyCommand="dumbproxy -config proxy.cfg -mode stdio %h %p" root@server1`
