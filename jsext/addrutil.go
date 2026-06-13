@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
 
@@ -173,6 +174,43 @@ func myIPAddressEx() []netip.Addr {
 func AddMyIPAddressEx(vm *goja.Runtime) error {
 	return vm.GlobalObject().Set("myIpAddressEx", func(call goja.FunctionCall) goja.Value {
 		res := mapSlice(myIPAddressEx(), func(a netip.Addr) string { return a.String() })
+		return vm.ToValue(strings.Join(res, ";"))
+	})
+}
+
+func netipAddrCmp(a, b netip.Addr) int {
+	if a.Is6() == b.Is6() {
+		if a.Less(b) {
+			return -1
+		} else if b.Less(a) {
+			return 1
+		}
+		return 0
+	} else {
+		if a.Is6() {
+			return -1
+		} else {
+			return 1
+		}
+	}
+}
+
+func AddSortIPAddressList(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("sortIpAddressList", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 1 {
+			panic(vm.NewTypeError("sortIpAddressList expects exactly 1 argument"))
+		}
+		addrParts := strings.Split(call.Argument(0).String(), ";")
+		addrs := make([]netip.Addr, 0, len(addrParts))
+		for _, part := range addrParts {
+			addr, err := netip.ParseAddr(part)
+			if err != nil {
+				return vm.ToValue("")
+			}
+			addrs = append(addrs, addr)
+		}
+		slices.SortFunc(addrs, netipAddrCmp)
+		res := mapSlice(addrs, func(a netip.Addr) string { return a.String() })
 		return vm.ToValue(strings.Join(res, ";"))
 	})
 }
