@@ -245,6 +245,7 @@ func (p *udpPort) close() error {
 type udpDemuxConn struct {
 	ctx       context.Context
 	cl        func()
+	denyDst   []netip.Prefix
 	wbuf      bytes.Buffer
 	werr      error
 	rpipe     *io.PipeReader
@@ -254,15 +255,16 @@ type udpDemuxConn struct {
 	ports     *secache.Cache[netip.AddrPort, *udpPort]
 }
 
-func newUDPDemuxConn(ctx context.Context, logger *clog.CondLogger) *udpDemuxConn {
+func newUDPDemuxConn(ctx context.Context, denyDst []netip.Prefix, logger *clog.CondLogger) *udpDemuxConn {
 	ctx, cl := context.WithCancel(ctx)
 	rpipe, wpipe := io.Pipe()
 	return &udpDemuxConn{
-		ctx:    ctx,
-		cl:     cl,
-		logger: logger,
-		rpipe:  rpipe,
-		wpipe:  wpipe,
+		ctx:     ctx,
+		cl:      cl,
+		denyDst: denyDst,
+		logger:  logger,
+		rpipe:   rpipe,
+		wpipe:   wpipe,
 		ports: secache.New[netip.AddrPort, *udpPort](
 			3,
 			func(_ netip.AddrPort, p *udpPort) bool {
@@ -311,12 +313,25 @@ func (m *udpDemuxConn) dispatchIncomingBuffer() error {
 		if err := m.dispatchIncomingPacket(cPkt); err != nil {
 			m.logger.Error("packet <%s => %s> dispatch failed: %v", cPkt.Src.String(), cPkt.Dst.String(), err)
 		}
-		// TODO: find some simpler way to advance buffer read position
 		io.CopyN(io.Discard, &m.wbuf, int64(size+4))
 	}
 }
 
+func (m *udpDemuxConn) isDstDenied(dst netip.Addr) bool {
+	dst = dst.Unmap()
+	for _, pfx := range m.denyDst {
+		if pfx.Contains(dst) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *udpDemuxConn) dispatchIncomingPacket(pkt *ClientOriginatedPacket) error {
+	if m.isDstDenied(pkt.Dst.Addr()) {
+		m.logger.Debug("packet <%s => %s> was dropped due to restricted destination address", pkt.Src.String(), pkt.Dst.String())
+		return nil
+	}
 	var err error
 	port := m.ports.GetOrCreate(pkt.Src, func() *udpPort {
 		// handle shutdown situation
@@ -401,14 +416,16 @@ func (_ *udpDemuxConn) SetWriteDeadline(t time.Time) error {
 }
 
 type TTInterceptor struct {
-	next   Dialer
-	logger *clog.CondLogger
+	next    Dialer
+	denyDst []netip.Prefix
+	logger  *clog.CondLogger
 }
 
-func NewTTInterceptor(next xproxy.Dialer, logger *clog.CondLogger) Dialer {
+func NewTTInterceptor(next xproxy.Dialer, denyDst []netip.Prefix, logger *clog.CondLogger) Dialer {
 	return &TTInterceptor{
-		next:   MaybeWrapWithContextDialer(next),
-		logger: logger,
+		next:    MaybeWrapWithContextDialer(next),
+		denyDst: denyDst,
+		logger:  logger,
 	}
 }
 
@@ -421,12 +438,12 @@ func (d *TTInterceptor) DialContext(ctx context.Context, network, address string
 	case "_check":
 		return nullConn{}, nil
 	case "_udp2":
+		return newUDPDemuxConn(ctx, d.denyDst, d.logger), nil
 	case "_icmp":
 		return nil, errors.New("not implemented")
 	default:
 		return d.next.DialContext(ctx, network, address)
 	}
-	return newUDPDemuxConn(ctx, d.logger), nil
 }
 
 func (d *TTInterceptor) WantsHostname(ctx context.Context, network, address string) bool {
