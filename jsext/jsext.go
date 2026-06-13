@@ -34,6 +34,7 @@ func ConfigureRuntime(vm *goja.Runtime) error {
 		AddIsResolvable,
 		AddIsResolvableEx,
 		AddIsInNet,
+		AddIsInNetEx,
 		AddSortIPAddressList,
 	} {
 		if err := f(vm); err != nil {

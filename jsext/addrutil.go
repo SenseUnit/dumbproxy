@@ -249,3 +249,20 @@ func AddIsResolvableEx(vm *goja.Runtime) error {
 		return vm.ToValue(len(res) > 0)
 	})
 }
+
+func AddIsInNetEx(vm *goja.Runtime) error {
+	return vm.GlobalObject().Set("isInNetEx", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) != 2 {
+			panic(vm.NewTypeError("isInNet expects exactly 2 arguments"))
+		}
+		host, err := netip.ParseAddr(call.Argument(0).String())
+		if err != nil {
+			return vm.ToValue(false)
+		}
+		pfx, err := netip.ParsePrefix(call.Argument(1).String())
+		if err != nil {
+			return vm.ToValue(false)
+		}
+		return vm.ToValue(pfx.Contains(host))
+	})
+}
