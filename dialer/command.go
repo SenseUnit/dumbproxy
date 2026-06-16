@@ -49,7 +49,8 @@ func (d *CommandDialer) Dial(network, address string) (net.Conn, error) {
 }
 
 func (d *CommandDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	cmd := exec.CommandContext(ctx, d.command[0], d.command[1:]...)
+	killCtx, kill := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(killCtx, d.command[0], d.command[1:]...)
 	cmd.Env = append(os.Environ(),
 		"DUMBPROXY_DST_ADDR="+address,
 		"DUMBPROXY_DST_NET="+network,
@@ -72,7 +73,7 @@ func (d *CommandDialer) DialContext(ctx context.Context, network, address string
 		cmdIn.Close()
 		cmdOut.Close()
 	}()
-	return NewPipeConn(cmdOut.(ReadPipe), cmdIn.(WritePipe)), nil
+	return NewPipeConn(cmdOut.(ReadPipe), cmdIn.(WritePipe), kill), nil
 }
 
 func (d *CommandDialer) WantsHostname(_ context.Context, _, _ string) bool {

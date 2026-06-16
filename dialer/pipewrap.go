@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -40,16 +41,19 @@ func (a PipeAddr) String() string {
 }
 
 type PipeConn struct {
-	r  ReadPipe
-	w  WritePipe
-	rc sync.Once
-	wc sync.Once
+	r          ReadPipe
+	w          WritePipe
+	onClose    func()
+	rc         sync.Once
+	wc         sync.Once
+	closeFlags atomic.Uint32
 }
 
-func NewPipeConn(r ReadPipe, w WritePipe) *PipeConn {
+func NewPipeConn(r ReadPipe, w WritePipe, onClose func()) *PipeConn {
 	return &PipeConn{
-		r: r,
-		w: w,
+		r:       r,
+		w:       w,
+		onClose: onClose,
 	}
 }
 
@@ -76,14 +80,26 @@ func (c *PipeConn) CloseWrite() error {
 	var err error
 	c.wc.Do(func() {
 		err = c.w.Close()
+		if c.onClose != nil {
+			c.closeFlags.Or(2)
+			if c.closeFlags.Load() == 3 {
+				c.onClose()
+			}
+		}
 	})
 	return err
 }
 
 func (c *PipeConn) CloseRead() error {
 	var err error
-	c.wc.Do(func() {
+	c.rc.Do(func() {
 		err = c.r.Close()
+		if c.onClose != nil {
+			c.closeFlags.Or(1)
+			if c.closeFlags.Load() == 3 {
+				c.onClose()
+			}
+		}
 	})
 	return err
 }
