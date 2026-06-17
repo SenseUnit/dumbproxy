@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
@@ -79,6 +80,7 @@ func NewProxyHandler(config *Config) *ProxyHandler {
 }
 
 func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, username string) {
+	tunnelStart := time.Now()
 	conn, err := s.dialer.DialContext(req.Context(), "tcp", req.RequestURI)
 	if err != nil {
 		var accessErr derrors.ErrAccessDenied
@@ -101,6 +103,8 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 		s.outboundMux.Lock()
 		delete(s.outbound, localAddr)
 		s.outboundMux.Unlock()
+		s.logger.Info("Tunnel closed: %v => %v dur=%v",
+			req.RemoteAddr, req.RequestURI, time.Since(tunnelStart).Round(time.Millisecond))
 	}()
 
 	if req.ProtoMajor == 0 || req.ProtoMajor == 1 {
