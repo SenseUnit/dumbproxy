@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SenseUnit/dumbproxy/auth"
 	"github.com/SenseUnit/dumbproxy/dialer"
@@ -112,6 +113,7 @@ func (s *ProxyHandler) HandleTunnel(wr http.ResponseWriter, req *http.Request, u
 			return
 		}
 		defer localconn.Close()
+		markAccessLogStatus(wr, http.StatusOK)
 
 		if buffered := rw.Reader.Buffered(); buffered > 0 {
 			s.logger.Debug("saving %d bytes buffered in bufio.ReadWriter", buffered)
@@ -191,7 +193,6 @@ func (s *ProxyHandler) HandleRequest(wr http.ResponseWriter, req *http.Request, 
 		return
 	}
 	defer resp.Body.Close()
-	s.logger.Info("%v %v %v %v", req.RemoteAddr, req.Method, req.URL, resp.Status)
 	delHopHeaders(resp.Header)
 	copyHeader(wr.Header(), resp.Header)
 	wr.WriteHeader(resp.StatusCode)
@@ -238,10 +239,21 @@ func (s *ProxyHandler) ServeHTTP(wr http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	start := time.Now()
+	wr = newAccessLogResponseWriter(wr)
 	ctx := req.Context()
 	username, ok := s.auth.Validate(ctx, wr, req)
 	localAddr := getLocalAddr(req.Context())
-	s.logger.Info("Request: %v => %v %q %v %v %v", req.RemoteAddr, localAddr, username, req.Proto, req.Method, req.URL)
+	target := accessLogTarget(req)
+	defer func() {
+		status := 0
+		if lw, ok := wr.(*accessLogResponseWriter); ok {
+			status = lw.status
+		}
+		s.logger.Info("Request: %v => %v %q %v %v %v %s dur=%v",
+			req.RemoteAddr, localAddr, username, req.Proto, req.Method, target,
+			accessLogStatus(status), accessLogDuration(start))
+	}()
 
 	if !ok {
 		return
