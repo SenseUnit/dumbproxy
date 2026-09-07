@@ -640,7 +640,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -dns-cache-timeout duration
     	timeout for shared resolves of DNS cache (default 5s)
   -dns-cache-ttl duration
-    	enable DNS cache with specified fixed TTL (default 10ns)
+    	enable DNS cache with specified fixed TTL (default 10s)
   -dns-prefer-address value
     	address resolution preference (none/ipv4/ipv6) (default ipv4)
   -dns-server value
