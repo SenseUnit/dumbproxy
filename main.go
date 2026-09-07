@@ -28,6 +28,7 @@ import (
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/libp2p/go-reuseport"
 	"github.com/things-go/go-socks5"
+	"go4.org/netipx"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 	"golang.org/x/crypto/bcrypt"
@@ -95,41 +96,6 @@ func (a *CSVArg) Set(line string) error {
 	}
 	a.values = values
 	return nil
-}
-
-type PrefixList []netip.Prefix
-
-func (l *PrefixList) Set(s string) error {
-	var pfxList []netip.Prefix
-	parts := strings.Split(s, ",")
-	for i, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		pfx, err := netip.ParsePrefix(part)
-		if err != nil {
-			return fmt.Errorf("unable to parse prefix list element %d (%q): %w", i, part, err)
-		}
-		pfxList = append(pfxList, pfx)
-	}
-	*l = PrefixList(pfxList)
-	return nil
-}
-
-func (l *PrefixList) String() string {
-	if l == nil || *l == nil {
-		return ""
-	}
-	parts := make([]string, 0, len([]netip.Prefix(*l)))
-	for _, part := range []netip.Prefix(*l) {
-		parts = append(parts, part.String())
-	}
-	return strings.Join(parts, ", ")
-}
-
-func (l *PrefixList) Value() []netip.Prefix {
-	return []netip.Prefix(*l)
 }
 
 type TLSVersionArg uint16
@@ -328,7 +294,7 @@ type CLIArgs struct {
 	dnsCacheNegTTL           time.Duration
 	dnsCacheTimeout          time.Duration
 	reqHeaderTimeout         time.Duration
-	denyDstAddr              PrefixList
+	denyDstAddr              []netipx.IPRange
 	jsAccessFilter           string
 	jsAccessFilterInstances  int
 	jsProxyRouterInstances   int
@@ -342,16 +308,16 @@ func parse_args() *CLIArgs {
 	args := &CLIArgs{
 		minTLSVersion: TLSVersionArg(tls.VersionTLS12),
 		maxTLSVersion: TLSVersionArg(tls.VersionTLS13),
-		denyDstAddr: PrefixList{
-			netip.MustParsePrefix("127.0.0.0/8"),
-			netip.MustParsePrefix("0.0.0.0/32"),
-			netip.MustParsePrefix("10.0.0.0/8"),
-			netip.MustParsePrefix("172.16.0.0/12"),
-			netip.MustParsePrefix("192.168.0.0/16"),
-			netip.MustParsePrefix("169.254.0.0/16"),
-			netip.MustParsePrefix("::1/128"),
-			netip.MustParsePrefix("::/128"),
-			netip.MustParsePrefix("fe80::/10"),
+		denyDstAddr: []netipx.IPRange{
+			netipx.RangeOfPrefix(netip.MustParsePrefix("127.0.0.0/8")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("0.0.0.0/32")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("10.0.0.0/8")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("172.16.0.0/12")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("192.168.0.0/16")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("169.254.0.0/16")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("::1/128")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("::/128")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("fe80::/10")),
 		},
 		autocertCache: autocertCache{
 			kind:  cacheKindDir,
@@ -484,7 +450,51 @@ func parse_args() *CLIArgs {
 	flag.DurationVar(&args.dnsCacheNegTTL, "dns-cache-neg-ttl", time.Second, "TTL for negative responses of DNS cache")
 	flag.DurationVar(&args.dnsCacheTimeout, "dns-cache-timeout", 5*time.Second, "timeout for shared resolves of DNS cache")
 	flag.DurationVar(&args.reqHeaderTimeout, "req-header-timeout", 30*time.Second, "amount of time allowed to read request headers")
-	flag.Var(&args.denyDstAddr, "deny-dst-addr", "comma-separated list of CIDR prefixes of forbidden IP addresses")
+	flag.Func("deny-dst-addr", "comma-separated list of CIDR prefixes/ranges/IPs of forbidden destinations. "+
+		"Option can be repeated multiple times. Empty argument resets list. Default is to block private and loopback networks.",
+		func(p string) error {
+			if p == "" {
+				args.denyDstAddr = nil
+				return nil
+			}
+			parts := strings.Split(p, ",")
+			for i, part := range parts {
+				part = strings.TrimSpace(part)
+				if part == "" {
+					continue
+				}
+				pos := strings.IndexAny(part, "-/")
+				var r netipx.IPRange
+				switch {
+				case pos == -1:
+					// Single address
+					a, err := netip.ParseAddr(part)
+					if err != nil {
+						return fmt.Errorf("unable to parse list element #%d (IP address) %q: %w", i+1, part, err)
+					}
+					r = netipx.IPRangeFrom(a, a)
+				case part[pos] == '-':
+					// Range
+					var err error
+					r, err = netipx.ParseIPRange(part)
+					if err != nil {
+						return fmt.Errorf("unable to parse list element #%d (IP range) %q: %w", i+1, part, err)
+					}
+				case part[pos] == '/':
+					p, err := netip.ParsePrefix(part)
+					if err != nil {
+						return fmt.Errorf("unable to parse list element #%d (IP prefix) %q: %w", i+1, part, err)
+					}
+					r = netipx.RangeOfPrefix(p)
+				default:
+					// Should never happen
+					return fmt.Errorf("unknown term provided as list element #%d - %q", i+1, part)
+				}
+				args.denyDstAddr = append(args.denyDstAddr, r)
+			}
+			return nil
+		},
+	)
 	flag.StringVar(&args.jsAccessFilter, "js-access-filter", "", "path to JS script file with the \"access\" filter function")
 	flag.IntVar(&args.jsAccessFilterInstances, "js-access-filter-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle access filter requests")
 	flag.IntVar(&args.jsProxyRouterInstances, "js-proxy-router-instances", runtime.GOMAXPROCS(0), "number of JS VM instances to handle proxy router requests")
@@ -682,9 +692,18 @@ func run() int {
 		}
 		filterRoot = j
 	}
-	if len(args.denyDstAddr.Value()) > 0 {
-		filterRoot = access.NewDstAddrFilter(args.denyDstAddr.Value(), filterRoot)
+
+	setBuilder := new(netipx.IPSetBuilder)
+	for _, r := range args.denyDstAddr {
+		setBuilder.AddRange(r)
 	}
+	denyDstIPSet, err := setBuilder.IPSet()
+	if err != nil {
+		mainLogger.Critical("Failed to construct dst addr filter: %v", err)
+		return 3
+	}
+
+	filterRoot = access.NewDstAddrFilter(denyDstIPSet, filterRoot)
 
 	// setup name resolution
 	var nameResolver dialer.Resolver = net.DefaultResolver
@@ -747,7 +766,7 @@ func run() int {
 
 	// unholy plug
 	if args.tt {
-		dialerRoot = dialer.NewTTInterceptor(dialerRoot, []netip.Prefix(args.denyDstAddr), ttDemuxLogger)
+		dialerRoot = dialer.NewTTInterceptor(dialerRoot, denyDstIPSet, ttDemuxLogger)
 	}
 
 	// handler requisites
