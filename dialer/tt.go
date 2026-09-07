@@ -242,10 +242,14 @@ func (p *udpPort) close() error {
 	return p.conn.Close()
 }
 
+type AddressChecker interface {
+	Contains(netip.Addr) bool
+}
+
 type udpDemuxConn struct {
 	ctx       context.Context
 	cl        func()
-	denyDst   []netip.Prefix
+	denyDst   AddressChecker
 	wbuf      bytes.Buffer
 	werr      error
 	rpipe     *io.PipeReader
@@ -255,7 +259,7 @@ type udpDemuxConn struct {
 	ports     *secache.Cache[netip.AddrPort, *udpPort]
 }
 
-func newUDPDemuxConn(ctx context.Context, denyDst []netip.Prefix, logger *clog.CondLogger) *udpDemuxConn {
+func newUDPDemuxConn(ctx context.Context, denyDst AddressChecker, logger *clog.CondLogger) *udpDemuxConn {
 	ctx, cl := context.WithCancel(ctx)
 	rpipe, wpipe := io.Pipe()
 	return &udpDemuxConn{
@@ -319,12 +323,7 @@ func (m *udpDemuxConn) dispatchIncomingBuffer() error {
 
 func (m *udpDemuxConn) isDstDenied(dst netip.Addr) bool {
 	dst = dst.Unmap()
-	for _, pfx := range m.denyDst {
-		if pfx.Contains(dst) {
-			return true
-		}
-	}
-	return false
+	return m.denyDst.Contains(dst)
 }
 
 func (m *udpDemuxConn) dispatchIncomingPacket(pkt *ClientOriginatedPacket) error {
@@ -417,11 +416,11 @@ func (_ *udpDemuxConn) SetWriteDeadline(t time.Time) error {
 
 type TTInterceptor struct {
 	next    Dialer
-	denyDst []netip.Prefix
+	denyDst AddressChecker
 	logger  *clog.CondLogger
 }
 
-func NewTTInterceptor(next xproxy.Dialer, denyDst []netip.Prefix, logger *clog.CondLogger) Dialer {
+func NewTTInterceptor(next xproxy.Dialer, denyDst AddressChecker, logger *clog.CondLogger) Dialer {
 	return &TTInterceptor{
 		next:    MaybeWrapWithContextDialer(next),
 		denyDst: denyDst,

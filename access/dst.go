@@ -7,24 +7,26 @@ import (
 	"net/netip"
 )
 
+type AddressChecker interface {
+	Contains(ip netip.Addr) bool
+}
+
 type DstAddrFilter struct {
-	pfxList []netip.Prefix
+	checker AddressChecker
 	next    Filter
 }
 
 type ErrDestinationAddressNotAllowed struct {
 	a netip.Addr
-	p netip.Prefix
 }
 
 func (e ErrDestinationAddressNotAllowed) Error() string {
-	return fmt.Sprintf("destination address %s is not allowed by filter prefix %s",
-		e.a.String(), e.p.String())
+	return fmt.Sprintf("destination address %s is not allowed by destination address filter", e.a.String())
 }
 
-func NewDstAddrFilter(prefixes []netip.Prefix, next Filter) DstAddrFilter {
+func NewDstAddrFilter(checker AddressChecker, next Filter) DstAddrFilter {
 	return DstAddrFilter{
-		pfxList: prefixes,
+		checker: checker,
 		next:    next,
 	}
 }
@@ -36,10 +38,8 @@ func (f DstAddrFilter) Access(ctx context.Context, req *http.Request, username, 
 		return f.next.Access(ctx, req, username, network, address)
 	}
 	addr := addrport.Addr().Unmap()
-	for _, pfx := range f.pfxList {
-		if pfx.Contains(addr) {
-			return ErrDestinationAddressNotAllowed{addr, pfx}
-		}
+	if f.checker.Contains(addr) {
+		return ErrDestinationAddressNotAllowed{addr}
 	}
 	return f.next.Access(ctx, req, username, network, address)
 }
