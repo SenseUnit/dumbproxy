@@ -630,7 +630,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -curves string
     	colon-separated list of enabled key exchange curves
   -deny-dst-addr value
-    	comma-separated list of CIDR prefixes of forbidden IP addresses (default 127.0.0.0/8, 0.0.0.0/32, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, ::1/128, ::/128, fe80::/10)
+    	comma-separated list of CIDR prefixes/ranges/IPs of forbidden destinations. Option can be repeated multiple times. Empty argument resets list. Default is to block private and loopback networks.
   -direct-response string
     	response parameters for direct HTTP requests
   -disable-http2
@@ -640,7 +640,7 @@ Usage of /home/user/go/bin/dumbproxy:
   -dns-cache-timeout duration
     	timeout for shared resolves of DNS cache (default 5s)
   -dns-cache-ttl duration
-    	enable DNS cache with specified fixed TTL
+    	enable DNS cache with specified fixed TTL (default 10ns)
   -dns-prefer-address value
     	address resolution preference (none/ipv4/ipv6) (default ipv4)
   -dns-server value
@@ -691,10 +691,10 @@ Usage of /home/user/go/bin/dumbproxy:
     	enable application protocol negotiation with TLS ALPN extension (default true)
   -tls-cookies
     	mark TLS sessions with cookie-like unique session IDs (default true)
-  -tls-session-key value
-    	override TLS server session keys. Key must be provided as hex-encoded 32-byte string. This option can be repeated multiple times, first key will be used to create session tickets. Empty value resets the list.
   -tls-session-cache-db string
     	location of TLS client session cache DB
+  -tls-session-key value
+    	override TLS server session keys. Key must be provided as hex-encoded 32-byte string. This option can be repeated multiple times, first key will be used to create session tickets. Empty value resets the list.
   -trusttunnel
     	enable TrustTunnel protocol extensions (default true)
   -unix-sock-mode value
