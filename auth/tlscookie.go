@@ -87,9 +87,14 @@ func (auth *TLSCookieAuth) addLearned(sessionID tlsutil.TLSSessionID) {
 }
 
 func (auth *TLSCookieAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
-	sessionID, ok := tlsutil.TLSSessionIDFromContext(ctx)
+	conn, ok := tlsutil.ConnFromContext(ctx)
 	if !ok {
-		auth.logger.Debug("tlscookie: no session extracted for %s", req.RemoteAddr)
+		auth.logger.Debug("tlscookie: no conn found in context for %s", req.RemoteAddr)
+		return auth.handleReject(ctx, wr, req)
+	}
+	sessionID, ok := tlsutil.GetTLSSessionID(conn)
+	if !ok {
+		auth.logger.Debug("tlscookie: no session ID recovered for %s", req.RemoteAddr)
 		return auth.handleReject(ctx, wr, req)
 	}
 	if auth.hiddenDomain != "" {

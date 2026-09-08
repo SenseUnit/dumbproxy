@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -16,9 +17,10 @@ import (
 	"time"
 
 	clog "github.com/SenseUnit/dumbproxy/log"
-	"github.com/hashicorp/go-multierror"
+	"github.com/SenseUnit/dumbproxy/tlsutil"
 
 	us "github.com/Snawoot/uniqueslice"
+	"github.com/hashicorp/go-multierror"
 )
 
 type serialNumberSetFile struct {
@@ -94,10 +96,26 @@ func (auth *CertAuth) handleReject(ctx context.Context, wr http.ResponseWriter, 
 }
 
 func (auth *CertAuth) Validate(ctx context.Context, wr http.ResponseWriter, req *http.Request) (string, bool) {
-	if req.TLS == nil || len(req.TLS.VerifiedChains) < 1 || len(req.TLS.VerifiedChains[0]) < 1 {
+	cs := req.TLS
+	if cs == nil {
+		auth.logger.Debug("resorting to workaround for go bug #81384")
+		// could be issue https://go.dev/issue/81384
+		conn, ok := tlsutil.ConnFromContext(ctx)
+		if ok {
+			if cstater, ok := conn.(interface{ ConnectionState() tls.ConnectionState }); ok {
+				cs = new(tls.ConnectionState)
+				*cs = cstater.ConnectionState()
+			} else {
+				auth.logger.Debug("...and conn does not support required interface!")
+			}
+		} else {
+			auth.logger.Debug("...and conn was not recovered from context!")
+		}
+	}
+	if cs == nil || len(cs.VerifiedChains) < 1 || len(cs.VerifiedChains[0]) < 1 {
 		return auth.handleReject(ctx, wr, req)
 	}
-	eeCert := req.TLS.VerifiedChains[0][0]
+	eeCert := cs.VerifiedChains[0][0]
 	if auth.blacklist.Load().file.Has(eeCert.SerialNumber) {
 		return auth.handleReject(ctx, wr, req)
 	}

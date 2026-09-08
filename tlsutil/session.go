@@ -63,17 +63,14 @@ func GetTLSSessionID(conn net.Conn) (TLSSessionID, bool) {
 	return getTLSSessionID(tagger)
 }
 
-func TLSSessionIDToContext(ctx context.Context, conn net.Conn) context.Context {
+func ConnToContext(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connKey{}, conn)
 }
 
-func TLSSessionIDFromContext(ctx context.Context) (TLSSessionID, bool) {
+func ConnFromContext(ctx context.Context) (net.Conn, bool) {
 	val := ctx.Value(connKey{})
 	conn, ok := val.(net.Conn)
-	if !ok {
-		return TLSSessionID{}, false
-	}
-	return GetTLSSessionID(conn)
+	return conn, ok
 }
 
 func EnableTLSCookies(cfg *tls.Config, logger *clog.CondLogger) *tls.Config {
