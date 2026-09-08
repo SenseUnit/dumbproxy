@@ -963,7 +963,7 @@ func run() int {
 				return stopContext
 			},
 			ConnContext: func(ctx context.Context, conn net.Conn) context.Context {
-				return tlsutil.TLSSessionIDToContext(ctx, conn)
+				return tlsutil.ConnToContext(ctx, conn)
 			},
 		}
 		if args.disableHTTP2 {
