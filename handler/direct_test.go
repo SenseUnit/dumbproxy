@@ -1,15 +1,19 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	derrors "github.com/SenseUnit/dumbproxy/dialer/errors"
+	clog "github.com/SenseUnit/dumbproxy/log"
 )
 
 type staticReject struct {
@@ -109,9 +113,11 @@ func TestDirectResponse(t *testing.T) {
 }
 
 func TestAccessReject(t *testing.T) {
+	var logBuf bytes.Buffer
 	proxy := NewProxyHandler(&Config{
 		Dialer:       deniedDialer{},
 		AccessReject: staticReject{status: http.StatusTeapot, body: "access response"},
+		Logger:       clog.NewCondLogger(log.New(&logBuf, "", 0), clog.INFO),
 	})
 	rr := httptest.NewRecorder()
 	req := &http.Request{
@@ -130,5 +136,13 @@ func TestAccessReject(t *testing.T) {
 	}
 	if rr.Body.String() != "access response" {
 		t.Fatalf("body = %q, want access response", rr.Body.String())
+	}
+
+	logOutput := logBuf.String()
+	if got := strings.Count(logOutput, "INFO     Request:"); got != 1 {
+		t.Fatalf("INFO Request log count = %d, want 1\nlogs:\n%s", got, logOutput)
+	}
+	if !strings.Contains(logOutput, "CONNECT openrouter.ai:443 418 I'm a teapot dur=") {
+		t.Fatalf("access log is missing status or duration\nlogs:\n%s", logOutput)
 	}
 }
