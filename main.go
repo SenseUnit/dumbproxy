@@ -318,6 +318,7 @@ func parse_args() *CLIArgs {
 			netipx.RangeOfPrefix(netip.MustParsePrefix("::1/128")),
 			netipx.RangeOfPrefix(netip.MustParsePrefix("::/128")),
 			netipx.RangeOfPrefix(netip.MustParsePrefix("fe80::/10")),
+			netipx.RangeOfPrefix(netip.MustParsePrefix("fc00::/7")),
 		},
 		autocertCache: autocertCache{
 			kind:  cacheKindDir,
